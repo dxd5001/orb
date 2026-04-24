@@ -1,4 +1,4 @@
-# Orb - Obsidian RAG Chatbot
+# Orb - RAG Chatbot for Obsidian Vaults
 
 A private RAG (Retrieval-Augmented Generation) chatbot for Obsidian vaults with multilingual support.
 
