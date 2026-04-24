@@ -369,7 +369,7 @@ class TestRetriever:
         """
         Property-based test: Retrieval should return at most top_k results.
         
-        Feature: obsidian-rag-chatbot, Property 9: Retrieval result count constraint
+        Feature: orb, Property 9: Retrieval result count constraint
         """
         import random
         
@@ -394,7 +394,7 @@ class TestRetriever:
         """
         Property-based test: Scope filtering should be accurate.
         
-        Feature: obsidian-rag-chatbot, Property 12: Scope filter accuracy
+        Feature: orb, Property 12: Scope filter accuracy
         """
         test_scopes = [
             Scope(folder="daily/"),

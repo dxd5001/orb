@@ -375,7 +375,7 @@ class TestIndexer:
         """
         Property-based test: All chunks should satisfy size constraints.
         
-        Feature: obsidian-rag-chatbot, Property 6: Chunk size constraints
+        Feature: orb, Property 6: Chunk size constraints
         """
         import random
         import string
@@ -406,7 +406,7 @@ class TestIndexer:
         """
         Property-based test: Metadata should round-trip correctly.
         
-        Feature: obsidian-rag-chatbot, Property 7: Metadata propagation round-trip
+        Feature: orb, Property 7: Metadata propagation round-trip
         """
         note = NoteDocument(
             file_path="test/path/note.md",

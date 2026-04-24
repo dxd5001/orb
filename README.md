@@ -246,7 +246,7 @@ PUT /api/config
 ### Project Structure
 
 ```
-obsidian-rag-chatbot/
+orb/
 |-- backend/
 |   |-- ingestion/          # Vault file reading
 |   |-- embedding/          # Text embedding

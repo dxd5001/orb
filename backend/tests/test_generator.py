@@ -254,7 +254,7 @@ class TestGenerator:
         """
         Property-based test: Citation generation completeness.
         
-        Feature: obsidian-rag-chatbot, Property 10: Citation generation completeness
+        Feature: orb, Property 10: Citation generation completeness
         """
         # Test various citation formats
         citation_responses = [
@@ -282,7 +282,7 @@ class TestGenerator:
         """
         Property-based test: Conversation history limit.
         
-        Feature: obsidian-rag-chatbot, Property 11: Conversation history limit
+        Feature: orb, Property 11: Conversation history limit
         """
         # Create history with more than MAX_HISTORY_TURNS
         long_history = []

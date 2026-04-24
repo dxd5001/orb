@@ -213,7 +213,7 @@ class TestConfigManagerPropertyBased:
         For any path string, validate_vault_path should only accept
         existing directories and reject non-existent paths, files, and empty strings.
         """
-        # Feature: obsidian-rag-chatbot, Property 1: Vault path validation
+        # Feature: orb, Property 1: Vault path validation
         config = ConfigManager()
         
         # Test with non-existent path (should be False)
@@ -238,7 +238,7 @@ class TestConfigManagerPropertyBased:
         For any combination of configuration items, validate_config should
         enumerate all missing required items without omission.
         """
-        # Feature: obsidian-rag-chatbot, Property 2: Configuration validation completeness
+        # Feature: orb, Property 2: Configuration validation completeness
         with patch.dict(os.environ, env_dict, clear=True):
             config = ConfigManager()
             missing = config.validate_config()

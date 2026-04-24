@@ -1,4 +1,4 @@
-# Design Document: Obsidian RAG Chatbot
+# Design Document: Orb
 
 ## 概要
 
@@ -542,7 +542,7 @@ class ConfigManager:
 ## ディレクトリ構成
 
 ```
-obsidian-rag-chatbot/
+orb/
 ├── backend/
 │   ├── main.py                  # FastAPIアプリケーションのエントリポイント
 │   ├── config.py                # ConfigManager（.env + keyring）
@@ -906,7 +906,7 @@ from hypothesis import strategies as st
 @settings(max_examples=100)
 def test_property_1_vault_path_validation(path: str):
     # Property 1: Vaultパスバリデーション
-    # Feature: obsidian-rag-chatbot, Property 1: Vaultパスバリデーション
+    # Feature: orb, Property 1: Vaultパスバリデーション
     ...
 ```
 
@@ -914,7 +914,7 @@ def test_property_1_vault_path_validation(path: str):
 
 - 各プロパティテストは最低100回のイテレーションを実行する
 - 各テストには対応するデザインドキュメントのプロパティ番号をコメントで記載する
-- タグ形式: `# Feature: obsidian-rag-chatbot, Property {N}: {property_text}`
+- タグ形式: `# Feature: orb, Property {N}: {property_text}`
 
 ### テスト対象と分類
 
