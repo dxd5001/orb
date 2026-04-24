@@ -1,0 +1,356 @@
+/* Component-specific styles */
+
+/* Main App Layout */
+.app {
+    display: flex;
+    height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+    width: var(--sidebar-width);
+    background-color: var(--secondary-color);
+    color: var(--white);
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.sidebar h2 {
+    margin-bottom: 20px;
+    font-size: 1.5em;
+}
+
+/* Main Content Area */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+.header {
+    background-color: var(--secondary-light);
+    color: var(--white);
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--secondary-color);
+}
+
+/* Chat Container */
+.chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--white);
+}
+
+/* Messages Area */
+.messages {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(100vh - 200px);
+}
+
+/* Message Styles */
+.message {
+    margin-bottom: 20px;
+    padding: 15px;
+    border-radius: 10px;
+    max-width: 80%;
+}
+
+.user-message {
+    background-color: var(--primary-color);
+    color: var(--white);
+    margin-left: auto;
+}
+
+.assistant-message {
+    background-color: #ecf0f1;
+    color: var(--text-color);
+}
+
+/* Answer Blocks */
+.answer-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.answer-block {
+    background-color: var(--white);
+    border: 1px solid #dfe6e9;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.answer-block-summary {
+    border-left: 4px solid var(--primary-color);
+}
+
+.answer-block-title {
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: var(--text-color);
+}
+
+.answer-block-content {
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+.answer-block-items {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.answer-block-items li {
+    margin-bottom: 4px;
+}
+
+/* Citations */
+.citations {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.citations h4 {
+    margin-bottom: 10px;
+    color: var(--text-color);
+}
+
+.citation {
+    margin-bottom: 10px;
+    padding: 8px;
+    background-color: var(--white);
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+}
+
+.citation-title {
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.citation-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--primary-color);
+    transition: var(--transition);
+}
+
+.citation-link:hover {
+    color: var(--primary-hover);
+    border-bottom-style: solid;
+    background-color: rgba(52, 152, 219, 0.1);
+}
+
+.citation-snippet {
+    color: var(--text-light);
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+/* Input Area */
+.input-container {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.search-mode-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    align-items: center;
+}
+
+.search-mode-label {
+    font-size: 0.9em;
+    color: var(--text-light);
+    white-space: nowrap;
+}
+
+.search-mode-select {
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 14px;
+    background-color: var(--white);
+}
+
+.input-field {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 16px;
+}
+
+.input-field:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.send-button {
+    padding: 12px 24px;
+    background-color: var(--primary-color);
+    color: var(--white);
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 16px;
+    transition: var(--transition);
+}
+
+.send-button:hover {
+    background-color: var(--primary-hover);
+}
+
+.send-button:disabled {
+    background-color: #bdc3c7;
+    cursor: not-allowed;
+}
+
+/* Status and Configuration */
+.status-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+.status-ready {
+    background-color: var(--success-color);
+}
+
+.status-indexing {
+    background-color: #f39c12;
+    animation: pulse 1.5s infinite;
+}
+
+.status-not-indexed {
+    background-color: var(--error-color);
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.config-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.config-title {
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: var(--text-color);
+}
+
+.config-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.config-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.config-field label {
+    font-size: 0.9em;
+    color: var(--text-light);
+}
+
+.config-field input,
+.config-field select {
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 14px;
+}
+
+.config-button {
+    padding: 10px 20px;
+    background-color: var(--primary-color);
+    color: var(--white);
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 14px;
+    transition: var(--transition);
+}
+
+.config-button:hover {
+    background-color: var(--primary-hover);
+}
+
+.config-button:disabled {
+    background-color: #bdc3c7;
+    cursor: not-allowed;
+}
+
+/* Loading and Error States */
+.loading {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.error-message {
+    color: var(--error-color);
+    background-color: var(--error-bg);
+    padding: 10px;
+    border-radius: var(--border-radius);
+    margin-bottom: 10px;
+}
+
+.success-message {
+    color: var(--success-color);
+    background-color: var(--success-bg);
+    padding: 10px;
+    border-radius: var(--border-radius);
+    margin-bottom: 10px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .app {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        width: 100%;
+        height: auto;
+        order: 2;
+    }
+    
+    .main-content {
+        order: 1;
+    }
+    
+    .input-container {
+        flex-direction: column;
+    }
+    
+    .message {
+        max-width: 95%;
+    }
+}

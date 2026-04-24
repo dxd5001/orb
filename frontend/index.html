@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Obsidian RAG Chatbot</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- External CSS files -->
+    <link rel="stylesheet" href="styles/globals.css" />
+    <link rel="stylesheet" href="styles/components.css" />
+
+    <!-- Note: All CSS has been moved to external files in styles/ directory -->
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- External JavaScript files -->
+    <script src="utils/http.js"></script>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      function App() {
+        const [messages, setMessages] = useState([]);
+        const [inputValue, setInputValue] = useState("");
+        const [searchMode, setSearchMode] = useState("auto");
+        const [isLoading, setIsLoading] = useState(false);
+        const [status, setStatus] = useState({ index_status: "not_indexed" });
+        const [config, setConfig] = useState({});
+        const [showConfig, setShowConfig] = useState(false);
+        const messagesEndRef = useRef(null);
+
+        const scrollToBottom = () => {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        };
+
+        useEffect(() => {
+          scrollToBottom();
+        }, [messages]);
+
+        useEffect(() => {
+          loadStatus();
+          loadConfig();
+        }, []);
+
+        const createObsidianUri = (filePath) => {
+          // Convert file path to Obsidian URI format
+          // Example: /path/to/vault/2026-04-01.md -> obsidian://open?file=2026-04-01
+          if (!filePath) return "#";
+
+          // Extract filename from path
+          const filename = filePath.split("/").pop().replace(".md", "");
+          return `obsidian://open?file=${encodeURIComponent(filename)}`;
+        };
+
+        const renderAnswerBlocks = (answerBlocks) => {
+          if (!answerBlocks || answerBlocks.length === 0) {
+            return null;
+          }
+
+          return (
+            <div className="answer-blocks">
+              {answerBlocks.map((block, index) => (
+                <div
+                  key={index}
+                  className={`answer-block answer-block-${block.type || "summary"}`}
+                >
+                  <div className="answer-block-title">{block.title}</div>
+                  {block.content && (
+                    <div className="answer-block-content">{block.content}</div>
+                  )}
+                  {block.items && block.items.length > 0 && (
+                    <ul className="answer-block-items">
+                      {block.items.map((item, itemIndex) => (
+                        <li key={itemIndex}>{item}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        };
+
+        const loadStatus = async () => {
+          try {
+            const response = await http.get("/api/status");
+            setStatus(response);
+          } catch (error) {
+            console.error("Failed to load status:", error);
+          }
+        };
+
+        const loadConfig = async () => {
+          try {
+            const response = await http.get("/api/config");
+            setConfig(response.config);
+          } catch (error) {
+            console.error("Failed to load config:", error);
+          }
+        };
+
+        const handleSendMessage = async () => {
+          if (!inputValue.trim() || isLoading) return;
+
+          const messageToSend = inputValue.trim();
+          const userMessage = { role: "user", content: messageToSend };
+          setMessages((prev) => [...prev, userMessage]);
+          setInputValue("");
+          setIsLoading(true);
+
+          try {
+            const response = await http.post("/api/chat", {
+              query: messageToSend,
+              search_mode: searchMode,
+              history: messages.slice(-20), // Send last 20 messages (10 turns) as history
+            });
+
+            const assistantMessage = {
+              role: "assistant",
+              content: response.answer,
+              answerBlocks: response.answer_blocks || [],
+              citations: response.citations,
+            };
+
+            setMessages((prev) => [...prev, assistantMessage]);
+          } catch (error) {
+            let errorText = "Unknown error occurred";
+            if (error.name === "AbortError") {
+              errorText = "Request timed out after 30 minutes";
+            } else if (error.message) {
+              errorText = error.message;
+            } else if (typeof error === "string") {
+              errorText = error;
+            } else if (error && error.toString) {
+              errorText = error.toString();
+            }
+
+            const errorMessage = {
+              role: "assistant",
+              content: `Error: ${errorText}`,
+              isError: true,
+            };
+            setMessages((prev) => [...prev, errorMessage]);
+          } finally {
+            setIsLoading(false);
+          }
+        };
+
+        const handleIndex = async () => {
+          setIsLoading(true);
+          try {
+            const response = await http.post("/api/index");
+            // Reload status after indexing completes
+            await loadStatus();
+            // Show success message
+            const successMessage = {
+              role: "assistant",
+              content: `Indexing completed successfully! Processed ${response.notes} notes and ${response.chunks} chunks.`,
+              isSuccess: true,
+            };
+            setMessages((prev) => [...prev, successMessage]);
+          } catch (error) {
+            const errorMessage = {
+              role: "assistant",
+              content: `Indexing failed: ${error.message}`,
+              isError: true,
+            };
+            setMessages((prev) => [...prev, errorMessage]);
+          } finally {
+            setIsLoading(false);
+          }
+        };
+
+        const handleConfigUpdate = async (newConfig) => {
+          try {
+            await http.put("/api/config", newConfig);
+            await loadConfig();
+            await loadStatus();
+            // Show success message
+            const successMessage = {
+              role: "assistant",
+              content: "Configuration updated successfully!",
+              isSuccess: true,
+            };
+            setMessages((prev) => [...prev, successMessage]);
+          } catch (error) {
+            const errorMessage = {
+              role: "assistant",
+              content: `Config update failed: ${error.message}`,
+              isError: true,
+            };
+            setMessages((prev) => [...prev, errorMessage]);
+          }
+        };
+
+        const getStatusIndicator = () => {
+          const statusClass =
+            status.index_status === "ready"
+              ? "status-ready"
+              : status.index_status === "error"
+                ? "status-error"
+                : "status-indexing";
+          return <span className={`status-indicator ${statusClass}`}></span>;
+        };
+
+        return (
+          <div className="app">
+            <div className="sidebar">
+              <h2>Obsidian RAG Chatbot</h2>
+
+              <div className="config-section">
+                <div className="config-title">
+                  {getStatusIndicator()} Status
+                </div>
+                <p style={{ fontSize: "0.9em", color: "#bdc3c7" }}>
+                  {status.index_status === "ready"
+                    ? "Ready to chat"
+                    : status.index_status === "not_indexed"
+                      ? "Not indexed"
+                      : "Indexing..."}
+                </p>
+                {status.total_chunks > 0 && (
+                  <p style={{ fontSize: "0.8em", color: "#bdc3c7" }}>
+                    {status.total_chunks} chunks indexed
+                  </p>
+                )}
+              </div>
+
+              <div className="config-section">
+                <div className="config-title">Actions</div>
+                <button
+                  className="config-button"
+                  onClick={handleIndex}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <span className="loading">Indexing...</span>
+                  ) : (
+                    "Index Vault"
+                  )}
+                </button>
+                <button
+                  className="config-button"
+                  onClick={() => setShowConfig(!showConfig)}
+                >
+                  {showConfig ? "Hide Config" : "Show Config"}
+                </button>
+              </div>
+
+              {showConfig && (
+                <div className="config-section">
+                  <div className="config-title">Configuration</div>
+                  <div className="config-field">
+                    <label className="config-label">Vault Path</label>
+                    <input
+                      type="text"
+                      className="config-input"
+                      value={config.VAULT_PATH || ""}
+                      onChange={(e) =>
+                        setConfig({ ...config, VAULT_PATH: e.target.value })
+                      }
+                      placeholder="/path/to/vault"
+                    />
+                  </div>
+                  <div className="config-field">
+                    <label className="config-label">LLM Provider</label>
+                    <select
+                      className="config-input"
+                      value={config.LLM_PROVIDER || ""}
+                      onChange={(e) =>
+                        setConfig({ ...config, LLM_PROVIDER: e.target.value })
+                      }
+                    >
+                      <option value="">Select provider</option>
+                      <option value="local">Local</option>
+                      <option value="openai">OpenAI</option>
+                    </select>
+                  </div>
+                  <div className="config-field">
+                    <label className="config-label">LLM Model</label>
+                    <input
+                      type="text"
+                      className="config-input"
+                      value={config.LLM_MODEL || ""}
+                      onChange={(e) =>
+                        setConfig({ ...config, LLM_MODEL: e.target.value })
+                      }
+                      placeholder="gpt-3.5-turbo"
+                    />
+                  </div>
+                  <div className="config-field">
+                    <label className="config-label">
+                      LLM Base URL (for local)
+                    </label>
+                    <input
+                      type="text"
+                      className="config-input"
+                      value={config.LLM_BASE_URL || ""}
+                      onChange={(e) =>
+                        setConfig({ ...config, LLM_BASE_URL: e.target.value })
+                      }
+                      placeholder="http://localhost:11434"
+                    />
+                  </div>
+                  <div className="config-field">
+                    <label className="config-label">Embedding Provider</label>
+                    <select
+                      className="config-input"
+                      value={config.EMBEDDING_PROVIDER || ""}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          EMBEDDING_PROVIDER: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">Select provider</option>
+                      <option value="local">Local</option>
+                      <option value="openai">OpenAI</option>
+                    </select>
+                  </div>
+                  <div className="config-field">
+                    <label className="config-label">Embedding Model</label>
+                    <input
+                      type="text"
+                      className="config-input"
+                      value={config.EMBEDDING_MODEL || ""}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          EMBEDDING_MODEL: e.target.value,
+                        })
+                      }
+                      placeholder="all-MiniLM-L6-v2"
+                    />
+                  </div>
+                  <button
+                    className="config-button"
+                    onClick={() => handleConfigUpdate(config)}
+                  >
+                    Update Config
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="main-content">
+              <div className="header">
+                <h1>Chat with your Obsidian Vault</h1>
+              </div>
+
+              <div className="chat-container">
+                <div className="messages">
+                  {messages.length === 0 && (
+                    <div
+                      style={{
+                        textAlign: "center",
+                        color: "#666",
+                        marginTop: "50px",
+                      }}
+                    >
+                      <h3>Welcome to Obsidian RAG Chatbot!</h3>
+                      <p>
+                        Start by asking a question about your vault content.
+                      </p>
+                      {status.index_status === "not_indexed" && (
+                        <p style={{ color: "#e74c3c" }}>
+                          Please index your vault first using the "Index Vault"
+                          button.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {messages.map((message, index) => (
+                    <div
+                      key={index}
+                      className={`message ${message.role}-message`}
+                    >
+                      {message.role === "assistant" &&
+                      message.answerBlocks &&
+                      message.answerBlocks.length > 0 ? (
+                        renderAnswerBlocks(message.answerBlocks)
+                      ) : (
+                        <div>{message.content}</div>
+                      )}
+
+                      {message.citations && message.citations.length > 0 && (
+                        <div className="citations">
+                          <strong>Sources:</strong>
+                          {message.citations.map((citation, i) => (
+                            <div key={i} className="citation">
+                              <div className="citation-title">
+                                <a
+                                  href={createObsidianUri(citation.source_path)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="citation-link"
+                                  title="Open in Obsidian"
+                                >
+                                  {citation.source_path ? citation.source_path.split('/').pop().replace('.md', '') : 'Unknown'}
+                                </a>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {message.isError && (
+                        <div style={{ marginTop: "10px", fontSize: "0.9em" }}>
+                          <span className="error-message">
+                            {message.content}
+                          </span>
+                        </div>
+                      )}
+
+                      {message.isSuccess && (
+                        <div style={{ marginTop: "10px", fontSize: "0.9em" }}>
+                          <span className="success-message">
+                            {message.content}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  <div ref={messagesEndRef} />
+                </div>
+
+                <div className="input-container">
+                  <div className="search-mode-group">
+                    <label className="search-mode-label">Search Mode:</label>
+                    <select
+                      className="search-mode-select"
+                      value={searchMode}
+                      onChange={(e) => setSearchMode(e.target.value)}
+                    >
+                      <option value="auto">Auto</option>
+                      <option value="diary">Diary</option>
+                      <option value="general">General</option>
+                    </select>
+                  </div>
+                  <div className="input-group">
+                    <input
+                      type="text"
+                      className="input-field"
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyPress={(e) =>
+                        e.key === "Enter" && handleSendMessage()
+                      }
+                      placeholder="Ask a question about your vault..."
+                      disabled={isLoading || status.index_status !== "ready"}
+                    />
+                    <button
+                      className="send-button"
+                      onClick={handleSendMessage}
+                      disabled={
+                        isLoading ||
+                        status.index_status !== "ready" ||
+                        !inputValue.trim()
+                      }
+                    >
+                      {isLoading ? (
+                        <span className="loading">Sending...</span>
+                      ) : (
+                        "Send"
+                      )}
+                    </button>
+                  </div>
+
+                  {status.index_status !== "ready" && (
+                    <div style={{ fontSize: "0.9em", color: "#666" }}>
+                      {status.index_status === "not_indexed"
+                        ? "Please index your vault first to start chatting."
+                        : "Indexing in progress..."}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // Add error logging for debugging
+      window.addEventListener("error", function (e) {
+        console.error("JavaScript Error:", e.error);
+        console.error("Error details:", {
+          message: e.message,
+          filename: e.filename,
+          lineno: e.lineno,
+          colno: e.colno,
+        });
+      });
+
+      // Add unhandled promise rejection logging
+      window.addEventListener("unhandledrejection", function (e) {
+        console.error("Unhandled Promise Rejection:", e.reason);
+      });
+
+      // Wait for DOM to be ready before rendering
+      function initializeApp() {
+        console.log("DOM ready, checking for root element...");
+        const rootElement = document.getElementById("root");
+
+        if (!rootElement) {
+          console.error("Root element not found!");
+          return;
+        }
+
+        console.log("Root element found, starting React render...");
+        try {
+          // Use React 18's createRoot API
+          const root = ReactDOM.createRoot(rootElement);
+          root.render(<App />);
+          console.log("React render completed successfully");
+        } catch (error) {
+          console.error("React render failed:", error);
+          // Fallback: show error message
+          rootElement.innerHTML = `
+                    <div style="padding: 20px; color: red;">
+                        <h2>Application Error</h2>
+                        <p>Failed to render the application:</p>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+        }
+      }
+
+      // Check if DOM is already ready
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initializeApp);
+      } else {
+        initializeApp();
+      }
+    </script>
+  </body>
+</html>
