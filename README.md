@@ -80,6 +80,10 @@ Edit `.env` with your settings:
 
 ```env
 # Required
+# Path to your Obsidian vault directory (the folder you opened in Obsidian)
+# macOS default: /Users/yourname/Documents/Obsidian Vault
+# Windows:       C:\Users\yourname\Documents\Obsidian Vault
+# Linux:         /home/yourname/Documents/Obsidian Vault
 VAULT_PATH=/path/to/your/obsidian/vault
 VECTOR_STORE_PATH=./chroma_db
 
