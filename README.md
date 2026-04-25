@@ -90,7 +90,7 @@ EMBEDDING_MODEL=all-MiniLM-L6-v2
 
 # Or OpenAI (uncomment and set API key)
 # LLM_PROVIDER=openai
-# LLM_MODEL=gpt-3.5-turbo
+# LLM_MODEL=gpt-4o-mini
 # EMBEDDING_PROVIDER=openai
 # EMBEDDING_MODEL=text-embedding-3-small
 # LLM_API_KEY=your_openai_api_key
@@ -102,10 +102,16 @@ EMBEDDING_MODEL=all-MiniLM-L6-v2
 #### Option 1: Menu Bar Application (Recommended)
 
 ```bash
-# After installation
+# Activate the virtual environment first
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Then launch the menu bar app
 orb
 
-# Or directly
+# Or directly without activating venv
+./venv/bin/orb
+
+# Or run the script directly
 python menubar_app.py
 ```
 
@@ -115,6 +121,11 @@ The menu bar app provides:
 - Automatic browser opening
 - Status monitoring
 - System tray integration
+
+> **Note**: The `orb` command is installed inside the virtual environment. You must either activate the venv (`source venv/bin/activate`) before running `orb`, or use the full path `./venv/bin/orb`. To avoid activating the venv every time, you can add an alias to your shell config (e.g. `~/.zshrc`):
+> ```bash
+> alias orb="/path/to/orb/venv/bin/orb"
+> ```
 
 #### Option 2: Web Server Only
 
@@ -293,17 +304,22 @@ python -m pytest tests/ -v
 
 ### Common Issues
 
-1. **"Collection not found" error**
+1. **`orb` command not found**
+   - Solution: Activate the virtual environment first: `source venv/bin/activate`
+   - Or use the full path: `./venv/bin/orb`
+   - Or add an alias to `~/.zshrc`: `alias orb="/path/to/orb/venv/bin/orb"`
+
+2. **"Collection not found" error**
    - Solution: Click "Index Vault" first to process your files
 
-2. **"Invalid vault path" error**
+3. **"Invalid vault path" error**
    - Solution: Check that `VAULT_PATH` in `.env` points to a valid Obsidian vault
 
-3. **LLM connection errors**
+4. **LLM connection errors**
    - For local: Ensure Ollama/LM Studio is running on the correct port
    - For OpenAI: Check your API key and network connection
 
-4. **Memory errors with large vaults**
+5. **Memory errors with large vaults**
    - Solution: Increase system RAM or use smaller embedding models
 
 ### Debug Mode

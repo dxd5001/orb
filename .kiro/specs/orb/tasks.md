@@ -1,4 +1,4 @@
-# 実装計画: Obsidian RAG Chatbot
+# 実装計画: Orb
 
 ## 概要
 
