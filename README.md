@@ -45,7 +45,17 @@ The system follows a layered architecture:
 
 ### Installation
 
-#### Option 1: Automated Installation (Recommended)
+#### Option 1: pip install (Recommended)
+
+The simplest and most reliable way to install Orb with the menu bar app:
+
+```bash
+pip install orb[menubar]
+```
+
+This installs the full backend (FastAPI, ChromaDB, embeddings, LLM support) plus the menu bar app dependencies (`pystray`, `Pillow`). The `orb` command will be available in your environment.
+
+#### Option 2: Automated Installation
 
 ```bash
 git clone https://github.com/dxd5001/orb.git
@@ -53,21 +63,15 @@ cd orb
 ./install.sh
 ```
 
-#### Option 2: Manual Installation
+#### Option 3: Manual Installation
 
 ```bash
 git clone https://github.com/dxd5001/orb.git
 cd orb
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r backend/requirements.txt
+pip install -e ".[menubar]"
 cp .env.example .env
-```
-
-#### Option 3: pip install
-
-```bash
-pip install orb[menubar]
 ```
 
 ### Configuration
