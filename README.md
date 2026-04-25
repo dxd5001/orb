@@ -105,6 +105,8 @@ EMBEDDING_MODEL=all-MiniLM-L6-v2
 # EMBEDDING_API_KEY=your_openai_api_key
 ```
 
+![LM Studio Server](docs/assets/orb_lmstudio_server.png)
+
 ### Running the Application
 
 #### Option 1: Menu Bar Application (Recommended)
