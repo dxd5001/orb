@@ -1,9 +1,9 @@
 #!/bin/bash
-# Installation script for Obsidian RAG Chatbot
+# Installation script for Orb - RAG Chatbot for Obsidian Vaults
 
 set -e
 
-echo "🚀 Installing Orb - Obsidian RAG Chatbot..."
+echo "🚀 Installing Orb - RAG Chatbot for Obsidian Vaults..."
 
 # Check Python version
 python_version=$(python3 --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
