@@ -1,5 +1,5 @@
 """
-Index API router for Obsidian RAG Chatbot.
+Index API router for Orb - RAG Chatbot for Obsidian Vaults.
 
 This module provides the /api/index endpoint for indexing vault content.
 """

@@ -1,5 +1,5 @@
 """
-FastAPI application entry point for Obsidian RAG Chatbot.
+FastAPI application entry point for Orb - RAG Chatbot for Obsidian Vaults.
 
 This module provides the main FastAPI application with configuration,
 initialization, and static file serving.
@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
     Handles startup and shutdown events for the FastAPI application.
     """
     # Startup
-    logger.info("Starting Obsidian RAG Chatbot...")
+    logger.info("Starting Orb - RAG Chatbot for Obsidian Vaults...")
     
     try:
         # Initialize configuration
@@ -119,7 +119,7 @@ async def lifespan(app: FastAPI):
     
     finally:
         # Shutdown
-        logger.info("Shutting down Obsidian RAG Chatbot...")
+        logger.info("Shutting down Orb - RAG Chatbot for Obsidian Vaults...")
 
 
 def create_app() -> FastAPI:
@@ -130,9 +130,9 @@ def create_app() -> FastAPI:
         Configured FastAPI application
     """
     app = FastAPI(
-        title="Obsidian RAG Chatbot",
+        title="Orb - RAG Chatbot for Obsidian Vaults",
         description="A private RAG chatbot for Obsidian vaults",
-        version="1.0.0",
+        version="0.1.0",
         lifespan=lifespan
     )
     
@@ -168,7 +168,7 @@ def create_app() -> FastAPI:
     @app.get("/")
     async def root():
         """Root endpoint."""
-        return {"message": "Obsidian RAG Chatbot API", "version": "1.0.0"}
+        return {"message": "Orb - RAG Chatbot for Obsidian Vaults API", "version": "0.1.0"}
     
     # Health check endpoint
     @app.get("/health")

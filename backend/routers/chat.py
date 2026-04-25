@@ -1,5 +1,5 @@
 """
-Chat API router for Obsidian RAG Chatbot.
+Chat API router for Orb - RAG Chatbot for Obsidian Vaults.
 
 This module provides the /api/chat endpoint for handling chat requests
 with RAG functionality.

@@ -1,5 +1,5 @@
 """
-Embedding layer for Obsidian RAG Chatbot.
+Embedding layer for Orb - RAG Chatbot for Obsidian Vaults.
 
 This layer provides abstract interfaces and implementations for text embedding
 generation using both local models and cloud APIs.

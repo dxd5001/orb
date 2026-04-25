@@ -1,5 +1,5 @@
 """
-Ingestion layer for Obsidian RAG Chatbot.
+Ingestion layer for Orb - RAG Chatbot for Obsidian Vaults.
 
 This layer is responsible for reading data from various sources and converting
 them into NoteDocument objects for downstream processing.

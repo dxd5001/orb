@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MCP Server for Obsidian RAG Chatbot
+MCP Server for Orb - RAG Chatbot for Obsidian Vaults
 
 Provides Model Context Protocol server functionality for external AI agents.
 """
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class MCPServer:
-    """MCP Server implementation for Obsidian RAG Chatbot."""
+    """MCP Server implementation for Orb - RAG Chatbot for Obsidian Vaults."""
     
     def __init__(self):
         """Initialize the MCP server."""

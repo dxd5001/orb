@@ -131,7 +131,7 @@ class TestLLMBackendFactory:
         """Test creating OpenAI LLM backend."""
         backend = LLMBackendFactory.create_backend(
             'openai',
-            'gpt-3.5-turbo',
+            'gpt-4o-mini',
             api_key='test-key'
         )
         assert isinstance(backend, OpenAILLMBackend)
@@ -371,10 +371,10 @@ class TestOpenAILLMBackend:
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
         
-        backend = OpenAILLMBackend('test-key', 'gpt-3.5-turbo')
+        backend = OpenAILLMBackend('test-key', 'gpt-4o-mini')
         
         assert backend.api_key == 'test-key'
-        assert backend.model_name == 'gpt-3.5-turbo'
+        assert backend.model_name == 'gpt-4o-mini'
         mock_openai_class.assert_called_once_with(api_key='test-key', timeout=60)
     
     @patch('backend.llm.openai_backend.OPENAI_AVAILABLE', True)
@@ -390,7 +390,7 @@ class TestOpenAILLMBackend:
         mock_client.chat.completions.create.return_value = mock_response
         mock_openai_class.return_value = mock_client
         
-        backend = OpenAILLMBackend('test-key', 'gpt-3.5-turbo')
+        backend = OpenAILLMBackend('test-key', 'gpt-4o-mini')
         result = backend.generate('Test prompt')
         
         assert result == 'OpenAI response'
@@ -404,7 +404,7 @@ class TestOpenAILLMBackend:
         mock_client.chat.completions.create.side_effect = openai.RateLimitError("Rate limit exceeded")
         mock_openai_class.return_value = mock_client
         
-        backend = OpenAILLMBackend('test-key', 'gpt-3.5-turbo')
+        backend = OpenAILLMBackend('test-key', 'gpt-4o-mini')
         
         with pytest.raises(RuntimeError, match="OpenAI API rate limit exceeded"):
             backend.generate('Test prompt')
@@ -419,7 +419,7 @@ class TestOpenAILLMBackend:
         backend = OpenAILLMBackend('test-key')
         models = backend.get_supported_models()
         
-        assert 'gpt-3.5-turbo' in models
+        assert 'gpt-4o-mini' in models
         assert 'gpt-4' in models
         assert 'gpt-4o' in models
     
@@ -452,7 +452,7 @@ class TestOpenAILLMBackend:
             mock_encoding.encode.return_value = [1, 2, 3, 4, 5]  # 5 tokens
             mock_tiktoken.encoding_for_model.return_value = mock_encoding
             
-            backend = OpenAILLMBackend('test-key', 'gpt-3.5-turbo')
+            backend = OpenAILLMBackend('test-key', 'gpt-4o-mini')
             tokens = backend.estimate_tokens('Test text')
             
             assert tokens == 5
@@ -476,11 +476,11 @@ class TestOpenAILLMBackend:
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
         
-        backend = OpenAILLMBackend('test-key', 'gpt-3.5-turbo')
+        backend = OpenAILLMBackend('test-key', 'gpt-4o-mini')
         cost = backend.estimate_cost(100, 50)  # 100 prompt tokens, 50 completion tokens
         
-        # Expected: (100/1000) * 0.0005 + (50/1000) * 0.0015 = 0.00005 + 0.000075 = 0.000125
-        assert cost == 0.000125
+        # Expected: (100/1000) * 0.00015 + (50/1000) * 0.0006 = 0.000015 + 0.00003 = 0.000045
+        assert cost == 0.000045
 
 
 if __name__ == '__main__':

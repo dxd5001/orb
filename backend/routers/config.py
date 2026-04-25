@@ -1,5 +1,5 @@
 """
-Configuration API router for Obsidian RAG Chatbot.
+Configuration API router for Orb - RAG Chatbot for Obsidian Vaults.
 
 This module provides the /api/config endpoints for managing configuration.
 """

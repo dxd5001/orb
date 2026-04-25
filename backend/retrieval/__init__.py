@@ -1,5 +1,5 @@
 """
-Retrieval layer for Obsidian RAG Chatbot.
+Retrieval layer for Orb - RAG Chatbot for Obsidian Vaults.
 
 This layer handles similarity search and retrieval of relevant chunks
 from the vector database based on user queries.

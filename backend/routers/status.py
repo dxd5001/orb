@@ -1,5 +1,5 @@
 """
-Status API router for Obsidian RAG Chatbot.
+Status API router for Orb - RAG Chatbot for Obsidian Vaults.
 
 This module provides the /api/status endpoint for checking system status.
 """

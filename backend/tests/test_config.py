@@ -128,13 +128,13 @@ class TestConfigManagerExample:
         """Test getting LLM config for cloud provider."""
         with patch.dict(os.environ, {
             'LLM_PROVIDER': 'openai',
-            'LLM_MODEL': 'gpt-3.5-turbo',
+            'LLM_MODEL': 'gpt-4o-mini',
             'OPENAI_API_KEY': 'test_key'
         }):
             config = ConfigManager()
             llm_config = config.get_llm_config()
             assert llm_config['provider'] == 'openai'
-            assert llm_config['model'] == 'gpt-3.5-turbo'
+            assert llm_config['model'] == 'gpt-4o-mini'
             assert llm_config['api_key'] == 'test_key'
     
     def test_get_llm_config_missing_base_url(self):
@@ -151,7 +151,7 @@ class TestConfigManagerExample:
         """Test error when cloud LLM config missing API key."""
         with patch.dict(os.environ, {
             'LLM_PROVIDER': 'openai',
-            'LLM_MODEL': 'gpt-3.5-turbo'
+            'LLM_MODEL': 'gpt-4o-mini'
         }, clear=True):
             config = ConfigManager()
             with pytest.raises(ValueError, match="OPENAI_API_KEY must be configured"):

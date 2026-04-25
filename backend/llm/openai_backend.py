@@ -27,10 +27,10 @@ class OpenAILLMBackend(LLMBackend):
     OpenAI LLM backend using OpenAI's API.
     
     This backend provides text generation using OpenAI's hosted models
-    such as GPT-3.5-turbo, GPT-4, etc.
+    such as GPT-4o-mini, GPT-4, etc.
     """
     
-    def __init__(self, api_key: str, model_name: str = 'gpt-3.5-turbo', base_url: str = None, timeout: int = 60):
+    def __init__(self, api_key: str, model_name: str = 'gpt-4o-mini', base_url: str = None, timeout: int = 60):
         """
         Initialize OpenAI LLM backend.
         
@@ -158,17 +158,21 @@ class OpenAILLMBackend(LLMBackend):
             True if API key is valid, False otherwise
         """
         try:
-            # Try a simple completion
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[{"role": "user", "content": "Hello"}],
-                max_tokens=10,
-                timeout=10
-            )
-            return response.choices and len(response.choices) > 0
+            # Try to get models list instead of generating text
+            response = self.client.models.list()
+            return response.data and len(response.data) > 0
         except Exception as e:
             logger.error(f"API key validation failed: {e}")
             return False
+    
+    def validate_connection(self) -> bool:
+        """
+        Validate connection to OpenAI API.
+        
+        Returns:
+            True if connection is valid, False otherwise
+        """
+        return self.validate_api_key()
     
     def get_model_info(self) -> dict:
         """
@@ -247,7 +251,7 @@ class OpenAILLMBackend(LLMBackend):
             'gpt-4o-mini': {'prompt': 0.00015, 'completion': 0.0006}
         }
         
-        model_pricing = pricing.get(self.model_name, pricing['gpt-3.5-turbo'])
+        model_pricing = pricing.get(self.model_name, pricing['gpt-4o-mini'])
         
         prompt_cost = (prompt_tokens / 1000) * model_pricing['prompt']
         completion_cost = (completion_tokens / 1000) * model_pricing['completion']

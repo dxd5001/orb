@@ -56,16 +56,16 @@ class TestMainApplication:
         with patch('backend.main.lifespan') as mock_lifespan:
             app = create_app()
             
-            assert app.title == "Obsidian RAG Chatbot"
-            assert app.version == "1.0.0"
+            assert app.title == "Orb - RAG Chatbot for Obsidian Vaults"
+            assert app.version == "0.1.0"
     
     def test_root_endpoint(self):
         """Test root endpoint."""
         response = self.client.get("/")
         assert response.status_code == 200
         data = response.json()
-        assert data["message"] == "Obsidian RAG Chatbot API"
-        assert data["version"] == "1.0.0"
+        assert data["message"] == "Orb - RAG Chatbot for Obsidian Vaults API"
+        assert data["version"] == "0.1.0"
     
     def test_health_endpoint(self):
         """Test health check endpoint."""

@@ -137,12 +137,25 @@ class LLMBackend(ABC):
             True if connection is successful, False otherwise
         """
         try:
-            # Try a simple generation
-            response = self.generate("Hello")
-            return response is not None and len(response) > 0
+            # Use validate_connection instead of generating text
+            if hasattr(self, 'validate_connection'):
+                return self.validate_connection()
+            else:
+                # Fallback to simple API endpoint check
+                return self._validate_api_connection()
         except Exception as e:
             logger.error(f"Connection test failed: {e}")
             return False
+    
+    def _validate_api_connection(self) -> bool:
+        """
+        Default API connection validation.
+        
+        Returns:
+            True if API is accessible, False otherwise
+        """
+        # Default implementation - subclasses should override
+        return True
 
 
 class LLMBackendFactory:

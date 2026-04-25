@@ -1,5 +1,5 @@
 """
-LLM layer for Obsidian RAG Chatbot.
+LLM layer for Orb - RAG Chatbot for Obsidian Vaults.
 
 This layer provides abstract interfaces and implementations for large language
 model backends including local models and cloud APIs.

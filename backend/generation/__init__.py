@@ -1,5 +1,5 @@
 """
-Generation layer for Obsidian RAG Chatbot.
+Generation layer for Orb - RAG Chatbot for Obsidian Vaults.
 
 This layer handles prompt construction, LLM generation, and response formatting
 including citation extraction.

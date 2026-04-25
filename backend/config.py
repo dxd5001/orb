@@ -1,5 +1,5 @@
 """
-Configuration management for Obsidian RAG Chatbot.
+Configuration management for Orb - RAG Chatbot for Obsidian Vaults.
 
 This module provides configuration management with support for:
 - .env file loading via python-dotenv
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 class ConfigManager:
     """
-    Manages configuration for the Obsidian RAG Chatbot.
+    Manages configuration for the Orb - RAG Chatbot for Obsidian Vaults.
     
     Supports loading from .env files, environment variables, and optional OS keychain.
     """

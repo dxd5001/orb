@@ -1,5 +1,5 @@
 """
-Data models for Obsidian RAG Chatbot.
+Data models for Orb - RAG Chatbot for Obsidian Vaults.
 
 This module defines the core data structures used throughout the application:
 - NoteDocument: Represents a single note from the vault
