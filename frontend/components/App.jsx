@@ -19,19 +19,22 @@ function App() {
   useEffect(() => {
     loadStatus();
     loadConfig();
+    // Poll status every 5 seconds to keep UI in sync
+    const interval = setInterval(loadStatus, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const createObsidianUri = (filePath) => {
     // Convert file path to Obsidian URI format
     // Example: /path/to/vault/2026-04-01.md -> obsidian://open?file=2026-04-01
-    if (!filePath || typeof filePath !== 'string') return "#";
+    if (!filePath || typeof filePath !== "string") return "#";
 
     try {
       // Extract filename from path
       const filename = filePath.split("/").pop().replace(".md", "");
       return `obsidian://open?file=${encodeURIComponent(filename)}`;
     } catch (error) {
-      console.error('Error creating Obsidian URI:', error);
+      console.error("Error creating Obsidian URI:", error);
       return "#";
     }
   };
@@ -45,8 +48,8 @@ function App() {
       return (
         <div className="answer-blocks">
           {answerBlocks.map((block, index) => {
-            if (!block || typeof block !== 'object') {
-              console.warn('Invalid block at index', index, ':', block);
+            if (!block || typeof block !== "object") {
+              console.warn("Invalid block at index", index, ":", block);
               return null;
             }
 
@@ -61,20 +64,22 @@ function App() {
                 {block.content && (
                   <div className="answer-block-content">{block.content}</div>
                 )}
-                {block.items && Array.isArray(block.items) && block.items.length > 0 && (
-                  <ul className="answer-block-items">
-                    {block.items.map((item, itemIndex) => (
-                      <li key={itemIndex}>{item}</li>
-                    ))}
-                  </ul>
-                )}
+                {block.items &&
+                  Array.isArray(block.items) &&
+                  block.items.length > 0 && (
+                    <ul className="answer-block-items">
+                      {block.items.map((item, itemIndex) => (
+                        <li key={itemIndex}>{item}</li>
+                      ))}
+                    </ul>
+                  )}
               </div>
             );
           })}
         </div>
       );
     } catch (error) {
-      console.error('Error in renderAnswerBlocks:', error);
+      console.error("Error in renderAnswerBlocks:", error);
       return (
         <div className="error-message">
           Error rendering answer blocks. Please check the console for details.
@@ -206,7 +211,7 @@ function App() {
   return (
     <div className="app">
       <div className="sidebar">
-        <h2>Obsidian RAG Chatbot</h2>
+        <h2>Orb - RAG Chatbot</h2>
 
         <div className="config-section">
           <div className="config-title">{getStatusIndicator()} Status</div>
@@ -354,7 +359,7 @@ function App() {
 
       <div className="main-content">
         <div className="header">
-          <h1>Obsidian RAG Chatbot</h1>
+          <h1>Orb - RAG Chatbot</h1>
         </div>
 
         <div className="chat-container">
@@ -367,7 +372,7 @@ function App() {
                   marginTop: "50px",
                 }}
               >
-                <h3>Welcome to Obsidian RAG Chatbot!</h3>
+                <h3>Welcome to Orb - RAG Chatbot!</h3>
                 <p>Start by asking a question about your vault content.</p>
                 {status.index_status === "not_indexed" && (
                   <p style={{ color: "#e74c3c" }}>
@@ -380,47 +385,65 @@ function App() {
 
             {messages.map((message, index) => {
               try {
-                if (!message || typeof message !== 'object') {
-                  console.warn('Invalid message at index', index, ':', message);
+                if (!message || typeof message !== "object") {
+                  console.warn("Invalid message at index", index, ":", message);
                   return null;
                 }
 
                 return (
-                  <div key={index} className={`message ${message.role || 'unknown'}-message`}>
+                  <div
+                    key={index}
+                    className={`message ${message.role || "unknown"}-message`}
+                  >
                     {message.content && (
                       <div className="message-content">{message.content}</div>
                     )}
 
-                    {message.answerBlocks && Array.isArray(message.answerBlocks) &&
+                    {message.answerBlocks &&
+                      Array.isArray(message.answerBlocks) &&
                       renderAnswerBlocks(message.answerBlocks)}
 
-                    {message.citations && Array.isArray(message.citations) && message.citations.length > 0 && (
-                      <div className="citations">
-                        <h4>Sources:</h4>
-                        {message.citations.map((citation, i) => {
-                          if (!citation || typeof citation !== 'object') {
-                            console.warn('Invalid citation at index', i, ':', citation);
-                            return null;
-                          }
-                          
-                          return (
-                            <div key={i} className="citation">
-                              <div className="citation-title">
-                                <a
-                                  href={createObsidianUri(citation.source_path)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="citation-link"
-                                  title="Open in Obsidian"
-                                >
-                                  {citation.source_path ? citation.source_path.split('/').pop().replace('.md', '') : 'Unknown'}
-                                </a>
+                    {message.citations &&
+                      Array.isArray(message.citations) &&
+                      message.citations.length > 0 && (
+                        <div className="citations">
+                          <h4>Sources:</h4>
+                          {message.citations.map((citation, i) => {
+                            if (!citation || typeof citation !== "object") {
+                              console.warn(
+                                "Invalid citation at index",
+                                i,
+                                ":",
+                                citation,
+                              );
+                              return null;
+                            }
+
+                            return (
+                              <div key={i} className="citation">
+                                <div className="citation-title">
+                                  <a
+                                    href={createObsidianUri(
+                                      citation.source_path,
+                                    )}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="citation-link"
+                                    title="Open in Obsidian"
+                                  >
+                                    {citation.source_path
+                                      ? citation.source_path
+                                          .split("/")
+                                          .pop()
+                                          .replace(".md", "")
+                                      : "Unknown"}
+                                  </a>
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                            );
+                          })}
+                        </div>
+                      )}
 
                     {message.isError && (
                       <div style={{ marginTop: "10px", fontSize: "0.9em" }}>
@@ -430,16 +453,24 @@ function App() {
 
                     {message.isSuccess && (
                       <div style={{ marginTop: "10px", fontSize: "0.9em" }}>
-                        <span className="success-message">{message.content}</span>
+                        <span className="success-message">
+                          {message.content}
+                        </span>
                       </div>
                     )}
                   </div>
                 );
               } catch (error) {
-                console.error('Error rendering message at index', index, ':', error);
+                console.error(
+                  "Error rendering message at index",
+                  index,
+                  ":",
+                  error,
+                );
                 return (
                   <div key={index} className="message error-message">
-                    Error rendering message. Please check the console for details.
+                    Error rendering message. Please check the console for
+                    details.
                   </div>
                 );
               }

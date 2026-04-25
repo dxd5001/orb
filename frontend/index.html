@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Obsidian RAG Chatbot</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>Orb - RAG Chatbot</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -210,7 +213,7 @@
         return (
           <div className="app">
             <div className="sidebar">
-              <h2>Obsidian RAG Chatbot</h2>
+              <h2>Orb - RAG Chatbot</h2>
 
               <div className="config-section">
                 <div className="config-title">
@@ -289,7 +292,7 @@
                       onChange={(e) =>
                         setConfig({ ...config, LLM_MODEL: e.target.value })
                       }
-                      placeholder="gpt-3.5-turbo"
+                      placeholder="gpt-4o-mini"
                     />
                   </div>
                   <div className="config-field">
@@ -363,7 +366,7 @@
                         marginTop: "50px",
                       }}
                     >
-                      <h3>Welcome to Obsidian RAG Chatbot!</h3>
+                      <h3>Welcome to Orb - RAG Chatbot!</h3>
                       <p>
                         Start by asking a question about your vault content.
                       </p>
@@ -402,7 +405,12 @@
                                   className="citation-link"
                                   title="Open in Obsidian"
                                 >
-                                  {citation.source_path ? citation.source_path.split('/').pop().replace('.md', '') : 'Unknown'}
+                                  {citation.source_path
+                                    ? citation.source_path
+                                        .split("/")
+                                        .pop()
+                                        .replace(".md", "")
+                                    : "Unknown"}
                                 </a>
                               </div>
                             </div>
