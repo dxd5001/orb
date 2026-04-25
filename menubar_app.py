@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 """
-Orb - Obsidian RAG Chatbot Menu Bar Application
+Orb - RAG Chatbot for Obsidian Vaults Menu Bar Application
 
-A system tray application that provides easy access to Orb - the Obsidian RAG Chatbot.
+A system tray application that provides easy access to Orb - the RAG Chatbot for Obsidian Vaults.
 Supports both Web UI and MCP server functionality.
 """
 
 import os
 import sys
+import signal
 import subprocess
 import threading
 import webbrowser
 from pathlib import Path
 from typing import Optional
+
+# Add project root to Python path
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
 
 import pystray
 from PIL import Image, ImageDraw
@@ -73,25 +78,43 @@ class OrbMenuBarApp:
                 logger.error(f"Backend directory not found: {self.backend_dir}")
                 return
             
-            # Start the web server
+            # Start the web server in a new process group so we can kill it cleanly
             cmd = [sys.executable, "main.py"]
             self.web_server_process = subprocess.Popen(
                 cmd,
                 cwd=self.backend_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                start_new_session=True  # creates a new process group
             )
             
             self.web_server_running = True
             logger.info("Web server started successfully")
             
-            # Open browser after a short delay
-            threading.Timer(2.0, self.open_web_ui).start()
+            # Open browser after server is ready
+            threading.Timer(3.0, self.open_web_ui).start()
             
         except Exception as e:
             logger.error(f"Failed to start web server: {e}")
     
+    def _kill_port(self, port: int):
+        """Kill any process listening on the given port as a fallback."""
+        try:
+            result = subprocess.run(
+                ["lsof", "-ti", f":{port}", "-sTCP:LISTEN"],
+                capture_output=True, text=True
+            )
+            pids = result.stdout.strip().split()
+            for pid in pids:
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                    logger.info(f"Killed orphaned process {pid} on port {port}")
+                except (ProcessLookupError, ValueError):
+                    pass
+        except Exception as e:
+            logger.warning(f"Failed to kill process on port {port}: {e}")
+
     def stop_web_server(self, icon=None, item=None):
         """Stop the web UI server."""
         if not self.web_server_running:
@@ -99,12 +122,18 @@ class OrbMenuBarApp:
             
         try:
             if self.web_server_process:
-                self.web_server_process.terminate()
+                # Kill the entire process group to ensure uvicorn and all children are stopped
+                try:
+                    os.killpg(os.getpgid(self.web_server_process.pid), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass  # Already dead
                 self.web_server_process.wait(timeout=5)
                 self.web_server_process = None
             
             self.web_server_running = False
             logger.info("Web server stopped")
+            # Fallback: ensure nothing is left on port 8000
+            self._kill_port(8000)
             
         except Exception as e:
             logger.error(f"Failed to stop web server: {e}")
@@ -124,14 +153,15 @@ class OrbMenuBarApp:
                 logger.warning(f"MCP server script not found: {mcp_script}")
                 return
             
-            # Start the MCP server
+            # Start the MCP server in a new process group
             cmd = [sys.executable, "mcp_server.py"]
             self.mcp_server_process = subprocess.Popen(
                 cmd,
                 cwd=self.backend_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                start_new_session=True  # creates a new process group
             )
             
             self.mcp_server_running = True
@@ -147,7 +177,10 @@ class OrbMenuBarApp:
             
         try:
             if self.mcp_server_process:
-                self.mcp_server_process.terminate()
+                try:
+                    os.killpg(os.getpgid(self.mcp_server_process.pid), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
                 self.mcp_server_process.wait(timeout=5)
                 self.mcp_server_process = None
             
@@ -197,17 +230,17 @@ class OrbMenuBarApp:
                     pystray.MenuItem(
                         "Start Web Server",
                         self.start_web_server,
-                        enabled=not self.web_server_running
+                        enabled=lambda item: not self.web_server_running
                     ),
                     pystray.MenuItem(
-                        "Stop Web Server", 
+                        "Stop Web Server",
                         self.stop_web_server,
-                        enabled=self.web_server_running
+                        enabled=lambda item: self.web_server_running
                     ),
                     pystray.MenuItem(
                         "Open Web UI",
                         self.open_web_ui,
-                        enabled=self.web_server_running
+                        enabled=lambda item: self.web_server_running
                     )
                 )
             ),
@@ -217,12 +250,12 @@ class OrbMenuBarApp:
                     pystray.MenuItem(
                         "Start MCP Server",
                         self.start_mcp_server,
-                        enabled=not self.mcp_server_running
+                        enabled=lambda item: not self.mcp_server_running
                     ),
                     pystray.MenuItem(
                         "Stop MCP Server",
                         self.stop_mcp_server,
-                        enabled=self.mcp_server_running
+                        enabled=lambda item: self.mcp_server_running
                     )
                 )
             ),
@@ -236,18 +269,18 @@ class OrbMenuBarApp:
                 self.quit_app
             )
         ]
-        
+
         return pystray.Menu(*menu_items)
     
     def run(self):
         """Run the menu bar application."""
-        logger.info("Starting Orb - Obsidian RAG Chatbot menu bar app...")
+        logger.info("Starting Orb - RAG Chatbot for Obsidian Vaults menu bar app...")
         
         # Create and run the tray icon
         icon = pystray.Icon(
             "orb",
             self.icon,
-            "Orb - Obsidian RAG Chatbot",
+            "Orb - RAG Chatbot for Obsidian Vaults",
             self.get_menu_items()
         )
         

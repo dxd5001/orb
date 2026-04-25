@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Setup script for Obsidian RAG Chatbot
+Setup script for Orb - RAG Chatbot for Obsidian Vaults
 """
 
 from setuptools import setup, find_packages
@@ -17,14 +17,15 @@ with open('backend/requirements.txt') as f:
 
 setup(
     name="orb",
-    version="1.0.0",
+    version="0.1.0",
     author="Daijiro Miyazawa",
-    author_email="your.email@example.com",
+    author_email="dxd5001@gmail.com",
     description="Orb - A private RAG chatbot for Obsidian vaults with multilingual support",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/dxd5001/orb",
     packages=find_packages(),
+    py_modules=["menubar_app", "orb_cli"],
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: End Users/Desktop",
