@@ -76,7 +76,11 @@ cp .env.example .env
 
 ### Configuration
 
-Edit `.env` with your settings:
+Copy `.env.example` to `.env` and edit it with your settings:
+
+```bash
+cp .env.example .env
+```
 
 ```env
 # Required
@@ -90,7 +94,7 @@ VECTOR_STORE_PATH=./chroma_db
 # Local LLM (Ollama/LM Studio)
 LLM_PROVIDER=local
 LLM_MODEL=llama2
-LLM_BASE_URL=http://localhost:11434
+LLM_BASE_URL=http://127.0.0.1:1235
 
 # Local Embeddings
 EMBEDDING_PROVIDER=local
@@ -105,7 +109,12 @@ EMBEDDING_MODEL=all-MiniLM-L6-v2
 # EMBEDDING_API_KEY=your_openai_api_key
 ```
 
-![LM Studio Server](docs/assets/orb_lmstudio_server.png)
+<p align="center">
+  <img src="docs/assets/orb_lmstudio_server.png" alt="LM Studio Server" />
+  <br/>
+  <em>LM Studio running as a local API server</em>
+</p>
+
 
 ### Running the Application
 
