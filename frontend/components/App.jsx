@@ -2,6 +2,8 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [searchMode, setSearchMode] = useState("auto");
+  const [scopeFolder, setScopeFolder] = useState("");
+  const [scopeTags, setScopeTags] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState({ index_status: "not_indexed" });
   const [config, setConfig] = useState({});
@@ -117,10 +119,15 @@ function App() {
 
     try {
       console.log("Sending message:", messageToSend);
+      const scope = {};
+      if (scopeFolder.trim()) scope.folder = scopeFolder.trim();
+      if (scopeTags.trim()) scope.tags = scopeTags.split(",").map(t => t.trim()).filter(Boolean);
+
       const response = await http.post("/api/chat", {
         query: messageToSend,
         search_mode: searchMode,
-        history: messages.slice(-20), // Send last 20 messages (10 turns) as history
+        scope: Object.keys(scope).length > 0 ? scope : null,
+        history: messages.slice(-20),
       });
       console.log("Received response:", response);
 
@@ -255,6 +262,40 @@ function App() {
               <option value="keyword">Keyword</option>
               <option value="hybrid">Hybrid</option>
             </select>
+          </div>
+        </div>
+
+        <div className="config-section">
+          <div className="config-title">Scope</div>
+          <div className="config-form">
+            <div className="config-field">
+              <label>Folder</label>
+              <input
+                type="text"
+                value={scopeFolder}
+                onChange={(e) => setScopeFolder(e.target.value)}
+                placeholder="e.g. daily/"
+              />
+            </div>
+            <div className="config-field">
+              <label>Tags</label>
+              <input
+                type="text"
+                value={scopeTags}
+                onChange={(e) => setScopeTags(e.target.value)}
+                placeholder="e.g. journal, work"
+              />
+              <small style={{ color: "#95a5a6", fontSize: "0.75em" }}>Comma-separated</small>
+            </div>
+            {(scopeFolder.trim() || scopeTags.trim()) && (
+              <button
+                className="config-button"
+                style={{ marginTop: "4px", fontSize: "0.8em", padding: "4px 8px" }}
+                onClick={() => { setScopeFolder(""); setScopeTags(""); }}
+              >
+                Clear Scope
+              </button>
+            )}
           </div>
         </div>
 

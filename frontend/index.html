@@ -30,6 +30,8 @@
         const [messages, setMessages] = useState([]);
         const [inputValue, setInputValue] = useState("");
         const [searchMode, setSearchMode] = useState("auto");
+        const [scopeFolder, setScopeFolder] = useState("");
+        const [scopeTags, setScopeTags] = useState("");
         const [isLoading, setIsLoading] = useState(false);
         const [status, setStatus] = useState({ index_status: "not_indexed" });
         const [config, setConfig] = useState({});
@@ -116,10 +118,15 @@
           setIsLoading(true);
 
           try {
+            const scope = {};
+            if (scopeFolder.trim()) scope.folder = scopeFolder.trim();
+            if (scopeTags.trim()) scope.tags = scopeTags.split(",").map(t => t.trim()).filter(Boolean);
+
             const response = await http.post("/api/chat", {
               query: messageToSend,
               search_mode: searchMode,
-              history: messages.slice(-20), // Send last 20 messages (10 turns) as history
+              scope: Object.keys(scope).length > 0 ? scope : null,
+              history: messages.slice(-20),
             });
 
             const assistantMessage = {
@@ -395,7 +402,9 @@
                       {message.citations && message.citations.length > 0 && (
                         <div className="citations">
                           <strong>Sources:</strong>
-                          {message.citations.map((citation, i) => (
+                          {message.citations
+                            .filter((c, i, arr) => arr.findIndex(x => x.source_path === c.source_path) === i)
+                            .map((citation, i) => (
                             <div key={i} className="citation">
                               <div className="citation-title">
                                 <a
@@ -451,6 +460,33 @@
                       <option value="diary">Diary</option>
                       <option value="general">General</option>
                     </select>
+                  </div>
+                  <div className="search-mode-group" style={{ gap: "4px", flexDirection: "column", alignItems: "flex-start" }}>
+                    <label className="search-mode-label">Scope (optional):</label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      style={{ fontSize: "0.85em", padding: "4px 8px", marginBottom: "4px" }}
+                      value={scopeFolder}
+                      onChange={(e) => setScopeFolder(e.target.value)}
+                      placeholder="Folder: e.g. daily/"
+                    />
+                    <input
+                      type="text"
+                      className="input-field"
+                      style={{ fontSize: "0.85em", padding: "4px 8px" }}
+                      value={scopeTags}
+                      onChange={(e) => setScopeTags(e.target.value)}
+                      placeholder="Tags: e.g. journal, work"
+                    />
+                    {(scopeFolder.trim() || scopeTags.trim()) && (
+                      <button
+                        style={{ fontSize: "0.75em", padding: "2px 8px", marginTop: "2px", background: "#7f8c8d", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                        onClick={() => { setScopeFolder(""); setScopeTags(""); }}
+                      >
+                        Clear Scope
+                      </button>
+                    )}
                   </div>
                   <div className="input-group">
                     <input
