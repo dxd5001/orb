@@ -127,12 +127,18 @@ class Retriever:
         try:
             # Handle different search modes
             if search_mode == SearchMode.DIARY:
-                return self._retrieve_diary_mode(query, normalized_query, scope, top_k)
+                chunks = self._retrieve_diary_mode(query, normalized_query, scope, top_k)
             elif search_mode == SearchMode.GENERAL:
-                return self._retrieve_general_mode(normalized_query, scope, top_k)
+                chunks = self._retrieve_general_mode(normalized_query, scope, top_k)
             else:  # AUTO mode
-                return self._retrieve_auto_mode(query, normalized_query, scope, top_k)
-            
+                chunks = self._retrieve_auto_mode(query, normalized_query, scope, top_k)
+
+            # Apply folder filter in Python (ChromaDB $contains unreliable for strings)
+            if scope and scope.folder:
+                chunks = self._apply_folder_filter(chunks, scope.folder)
+
+            return chunks
+
         except Exception as e:
             logger.error(f"Retrieval failed: {e}")
             raise RuntimeError(f"Retrieval failed: {e}")
@@ -320,52 +326,45 @@ class Retriever:
     def _build_scope_filter(self, scope: Optional[Scope]) -> Optional[Dict[str, Any]]:
         """
         Build ChromaDB filter conditions from scope.
-        
-        Args:
-            scope: Search scope with folder and/or tag filters
-            
-        Returns:
-            ChromaDB where filter dictionary or None
+        Only tag filters are applied at ChromaDB level.
+        Folder filtering is done post-retrieval in Python (ChromaDB $contains
+        does not reliably support substring matching on string fields).
         """
         if not scope:
             return None
-        
+
         conditions = []
-        
-        # Folder scope filter
-        if scope.folder:
-            folder_condition = {
-                "source_path": {
-                    "$contains": scope.folder
-                }
-            }
-            conditions.append(folder_condition)
-        
-        # Tag scope filter
+
+        # Tag scope filter only (folder is handled post-retrieval)
         if scope.tags:
-            # For tag filtering, we need to check if the serialized tags contain all required tags
             tag_conditions = []
             for tag in scope.tags:
                 tag_condition = {
                     "tags": {
-                        "$contains": f'"{tag}"'  # Tag should be in JSON serialized format
+                        "$contains": f'"{tag}"'
                     }
                 }
                 tag_conditions.append(tag_condition)
-            
+
             if len(tag_conditions) == 1:
                 conditions.append(tag_conditions[0])
             else:
-                # Multiple tags - use $and operator
                 conditions.append({"$and": tag_conditions})
-        
-        # Combine conditions with $and if multiple
+
         if len(conditions) == 0:
             return None
         elif len(conditions) == 1:
             return conditions[0]
         else:
             return {"$and": conditions}
+
+    def _apply_folder_filter(self, chunks: List[Chunk], folder: str) -> List[Chunk]:
+        """Filter chunks by folder prefix in Python."""
+        # Normalize: ensure folder ends with /
+        prefix = folder if folder.endswith("/") else folder + "/"
+        filtered = [c for c in chunks if c.source_path.startswith(prefix) or c.source_path.startswith(folder)]
+        logger.info(f"Folder filter '{folder}': {len(chunks)} -> {len(filtered)} chunks")
+        return filtered
     
     def _is_diary_source_path(self, source_path: str) -> bool:
         return source_path.startswith("Diary/") or source_path.startswith("daily/")
@@ -760,7 +759,7 @@ class Retriever:
         
         results = self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=min(top_k, 100),
+            n_results=min(top_k * 5, 100),
             where=where_filter
         )
         
