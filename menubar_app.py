@@ -49,19 +49,22 @@ class OrbMenuBarApp:
         self.icon = self.create_icon()
         
     def create_icon(self) -> Image.Image:
-        """Create a simple icon for the menu bar."""
-        # Create a simple 64x64 icon with "Orb" text
-        image = Image.new('RGB', (64, 64), color='blue')
+        """Create the menu bar icon from the logo image."""
+        logo_path = self.app_dir / "docs" / "assets" / "orb-logo-menuicon-8.png"
+
+        if logo_path.exists():
+            try:
+                img = Image.open(logo_path).convert("RGBA")
+                # Resize to 22x22 for macOS menu bar
+                img = img.resize((22, 22), Image.LANCZOS)
+                return img
+            except Exception as e:
+                logger.warning(f"Failed to load logo image: {e}, falling back to default icon")
+
+        # Fallback: simple blue square with "Orb" text
+        image = Image.new('RGBA', (22, 22), color=(0, 122, 255, 255))
         draw = ImageDraw.Draw(image)
-        
-        # Draw "Orb" text
-        try:
-            # Try to use a larger font
-            draw.text((8, 20), "Orb", fill='white')
-        except:
-            # Fallback to default font
-            draw.text((8, 20), "Orb", fill='white')
-            
+        draw.text((2, 5), "O", fill='white')
         return image
     
     def start_web_server(self, icon=None, item=None):
