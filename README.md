@@ -1,5 +1,9 @@
 # Orb - RAG Chatbot for Obsidian Vaults
 
+<p align="center">
+  <img src="docs/assets/orb-logo@2x-8.png" alt="Orb Logo" width="200" />
+</p>
+
 A private RAG (Retrieval-Augmented Generation) chatbot for Obsidian vaults with multilingual support.
 
 ## License
@@ -121,6 +125,9 @@ EMBEDDING_MODEL=all-MiniLM-L6-v2
 #### Option 1: Menu Bar Application (Recommended)
 
 ```bash
+# Navigate to the directory where you cloned/installed orb
+cd /path/to/orb
+
 # Activate the virtual environment first
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
@@ -179,7 +186,7 @@ python mcp_server.py
 | `API_PORT`           | Server port                          | `8000`                   |
 | `LLM_PROVIDER`       | LLM backend (`local`/`openai`)       | `local`                  |
 | `LLM_MODEL`          | LLM model name                       | `llama2`                 |
-| `LLM_BASE_URL`       | Local LLM API URL                    | `http://localhost:11434` |
+| `LLM_BASE_URL`       | Local LLM API URL                    | `http://127.0.0.1:1235` |
 | `LLM_API_KEY`        | OpenAI API key                       | None                     |
 | `EMBEDDING_PROVIDER` | Embedding backend (`local`/`openai`) | `local`                  |
 | `EMBEDDING_MODEL`    | Embedding model name                 | `all-MiniLM-L6-v2`       |
