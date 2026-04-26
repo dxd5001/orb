@@ -291,6 +291,9 @@ Please base your answer only on this context and return valid JSON."""
             citations = self._extract_structured_citations(answer, chunks)
             if not citations:
                 citations = self._infer_citations_from_content(answer, chunks)
+            # Fallback: always cite all chunks if still empty
+            if not citations:
+                citations = [self._create_citation_from_chunk(c) for c in chunks]
             return answer, answer_blocks, citations
         
         # Try to extract structured citations first
@@ -300,7 +303,11 @@ Please base your answer only on this context and return valid JSON."""
         # Clean up the response by removing citation markers
         answer = self._clean_response_text(llm_response)
         logger.info(f"Cleaned answer length: {len(answer)}")
-        
+
+        # Fallback: always cite all chunks if still empty
+        if not citations:
+            citations = [self._create_citation_from_chunk(c) for c in chunks]
+
         answer_blocks = [AnswerBlock(type="summary", title="回答", content=answer, items=[])]
         return answer, answer_blocks, citations
 
