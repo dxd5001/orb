@@ -292,16 +292,30 @@ orb/
 |   |-- generation/         # Response generation
 |   |-- llm/               # LLM backends
 |   |-- routers/           # API endpoints
+|   |-- utils/             # Utility functions
 |   |-- tests/             # Test suite
 |   |-- config.py          # Configuration management
 |   |-- models.py          # Data models
 |   |-- main.py            # Application entry
+|   |-- mcp_server.py      # MCP server implementation
 |   |-- requirements.txt   # Dependencies
+|   |-- chroma_db/         # Vector database storage (runtime)
 |-- frontend/
+|   |-- components/        # React components
+|   |-- styles/            # CSS styles
+|   |-- utils/             # Frontend utilities
 |   |-- index.html         # Web interface
-|-- tests/                # Integration tests
+|-- docs/                  # Documentation assets
+|-- tests/                 # Integration tests
 |-- .env.example          # Environment template
-|-- README.md             # This file
+|-- DEVELOPMENT.md         # Development guide
+|-- LICENSE                # License file
+|-- install.sh             # Installation script
+|-- menubar_app.py         # Menubar application
+|-- orb_cli.py             # CLI interface
+|-- pyproject.toml         # Python project configuration
+|-- setup.py               # Package setup
+|-- README.md              # This file
 ```
 
 ### Running Tests

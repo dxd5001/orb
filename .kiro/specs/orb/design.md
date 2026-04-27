@@ -546,6 +546,8 @@ orb/
 ├── backend/
 │   ├── main.py                  # FastAPIアプリケーションのエントリポイント
 │   ├── config.py                # ConfigManager（.env + keyring）
+│   ├── mcp_server.py            # MCPサーバー実装
+│   ├── models.py                # Pydanticモデル（ChatRequest、ChatResponse等）
 │   ├── ingestion/
 │   │   ├── __init__.py
 │   │   ├── base.py              # BaseIngestor（抽象クラス）
@@ -569,20 +571,41 @@ orb/
 │   │   ├── base.py              # EmbeddingBackend（抽象クラス）
 │   │   ├── local.py             # LocalEmbeddingBackend（sentence-transformers）
 │   │   └── openai_backend.py    # OpenAIEmbeddingBackend
-│   ├── models.py                # Pydanticモデル（ChatRequest、ChatResponse等）
 │   ├── routers/
 │   │   ├── chat.py              # /api/chat エンドポイント
 │   │   ├── index.py             # /api/index エンドポイント
 │   │   ├── status.py            # /api/status エンドポイント
 │   │   └── config.py            # /api/config エンドポイント
-│   └── requirements.txt
+│   ├── utils/                   # ユーティリティ関数
+│   ├── tests/                   # バックエンドテストスイート
+│   ├── requirements.txt         # Python依存関係
+│   └── chroma_db/               # ベクターデータベース（実行時生成）
 ├── frontend/
-│   ├── index.html               # Web UIのエントリポイント
-│   ├── app.js                   # チャット・設定UIのロジック
-│   └── style.css
+│   ├── components/              # Reactコンポーネント
+│   │   └── App.jsx              # メインアプリケーションコンポーネント
+│   ├── styles/                  # CSSスタイル
+│   │   ├── components.css       # コンポーネントスタイル
+│   │   └── globals.css          # グローバルスタイル
+│   ├── utils/                   # フロントエンドユーティリティ
+│   │   └── http.js              # HTTP通信ユーティリティ
+│   └── index.html               # Web UIのエントリポイント
+├── docs/                        # ドキュメント資産
+│   └── assets/                  # ドキュメント画像など
+├── tests/                       # 統合テスト
 ├── .env.example                 # 設定テンプレート
 ├── .gitignore                   # .envを除外
-└── README.md
+├── .prettierignore              # Prettier除外ファイル
+├── .prettierrc.json            # Prettier設定
+├── .ruff.toml                   # Ruffリンター設定
+├── DEVELOPMENT.md               # 開発ガイド
+├── LICENSE                      # ライセンスファイル
+├── install.sh                   # インストールスクリプト
+├── menubar_app.py               # メニューバーアプリケーション
+├── orb_cli.py                   # CLIインターフェース
+├── package.json                 # Node.js依存関係
+├── pyproject.toml               # Pythonプロジェクト設定
+├── setup.py                     # パッケージセットアップ
+└── README.md                    # プロジェクトドキュメント
 ```
 
 ---
