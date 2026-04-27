@@ -95,9 +95,9 @@ cp .env.example .env
 VAULT_PATH=/path/to/your/obsidian/vault
 VECTOR_STORE_PATH=./chroma_db
 
-# Local LLM (Ollama/LM Studio)
+# Local LLM (LM Studio/Ollama)
 LLM_PROVIDER=local
-LLM_MODEL=llama2
+LLM_MODEL=google/gemma-4-e4b
 LLM_BASE_URL=http://127.0.0.1:1235
 
 # Local Embeddings
@@ -185,7 +185,7 @@ python mcp_server.py
 | `VECTOR_STORE_PATH`  | ChromaDB storage path                | `./chroma_db`            |
 | `API_PORT`           | Server port                          | `8000`                   |
 | `LLM_PROVIDER`       | LLM backend (`local`/`openai`)       | `local`                  |
-| `LLM_MODEL`          | LLM model name                       | `llama2`                 |
+| `LLM_MODEL`          | LLM model name                       | `google/gemma-4-e4b`                 |
 | `LLM_BASE_URL`       | Local LLM API URL                    | `http://127.0.0.1:1235` |
 | `LLM_API_KEY`        | OpenAI API key                       | None                     |
 | `EMBEDDING_PROVIDER` | Embedding backend (`local`/`openai`) | `local`                  |
@@ -195,17 +195,17 @@ python mcp_server.py
 
 ### Local LLM Setup
 
-#### Ollama
-
-1. Install Ollama: https://ollama.ai/
-2. Pull a model: `ollama pull llama2`
-3. Set `LLM_BASE_URL=http://localhost:11434` in `.env`
-
 #### LM Studio
 
 1. Install LM Studio: https://lmstudio.ai/
 2. Start a model server
 3. Set `LLM_BASE_URL` to your server URL in `.env`
+
+#### Ollama
+
+1. Install Ollama: https://ollama.ai/
+2. Pull a model: `ollama pull llama2`
+3. Set `LLM_BASE_URL=http://localhost:11434` in `.env`
 
 ### OpenAI Setup
 
