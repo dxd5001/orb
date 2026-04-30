@@ -5,7 +5,7 @@ const http = {
         const timeoutId = setTimeout(() => controller.abort(), timeout);
         
         try {
-            const response = await fetch(url, {
+            const response = await fetch(`http://localhost:8000${url}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -32,7 +32,7 @@ const http = {
         const timeoutId = setTimeout(() => controller.abort(), timeout);
         
         try {
-            const response = await fetch(url, {
+            const response = await fetch(`http://localhost:8000${url}`, {
                 signal: controller.signal
             });
             
@@ -54,7 +54,7 @@ const http = {
         const timeoutId = setTimeout(() => controller.abort(), timeout);
         
         try {
-            const response = await fetch(url, {
+            const response = await fetch(`http://localhost:8000${url}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
