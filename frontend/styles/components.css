@@ -133,6 +133,17 @@
 .citation-title {
     font-weight: bold;
     margin-bottom: 4px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.citation-number {
+    font-size: 0.85em;
+    color: var(--primary-color);
+    font-weight: bold;
+    min-width: 24px;
+    flex-shrink: 0;
 }
 
 .citation-link {
@@ -146,6 +157,24 @@
     color: var(--primary-hover);
     border-bottom-style: solid;
     background-color: rgba(52, 152, 219, 0.1);
+}
+
+/* 回答本文中の [1][2] インライン引用リンク */
+.inline-citation-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 0.85em;
+    font-weight: bold;
+    vertical-align: super;
+    line-height: 0;
+    padding: 0 1px;
+    border-radius: 2px;
+    transition: background-color 0.15s;
+}
+
+.inline-citation-link:hover {
+    background-color: rgba(52, 152, 219, 0.15);
+    text-decoration: underline;
 }
 
 .citation-snippet {

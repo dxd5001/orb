@@ -172,7 +172,38 @@
           return `obsidian://open?file=${encodeURIComponent(filename)}`;
         };
 
-        const renderAnswerBlocks = (answerBlocks) => {
+        // [1], [2] などの引用番号をクリッカブルなリンクに変換する
+        const renderTextWithCitationLinks = (text, citations) => {
+          if (!text || !citations || citations.length === 0) return text;
+          const parts = text.split(/(\[\d+\])/g);
+          return parts.map((part, i) => {
+            const match = part.match(/^\[(\d+)\]$/);
+            if (match) {
+              const num = parseInt(match[1], 10);
+              const citation = citations[num - 1];
+              if (citation) {
+                return (
+                  <a
+                    key={i}
+                    href={`#citation-${num}`}
+                    className="inline-citation-link"
+                    title={citation.source_path ? citation.source_path.split("/").pop().replace(".md", "") : ""}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      const el = document.getElementById(`citation-${num}`);
+                      if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                    }}
+                  >
+                    [{num}]
+                  </a>
+                );
+              }
+            }
+            return part;
+          });
+        };
+
+        const renderAnswerBlocks = (answerBlocks, citations) => {
           if (!answerBlocks || answerBlocks.length === 0) {
             return null;
           }
@@ -186,12 +217,16 @@
                 >
                   <div className="answer-block-title">{block.title}</div>
                   {block.content && (
-                    <div className="answer-block-content">{block.content}</div>
+                    <div className="answer-block-content">
+                      {renderTextWithCitationLinks(block.content, citations)}
+                    </div>
                   )}
                   {block.items && block.items.length > 0 && (
                     <ul className="answer-block-items">
                       {block.items.map((item, itemIndex) => (
-                        <li key={itemIndex}>{item}</li>
+                        <li key={itemIndex}>
+                          {renderTextWithCitationLinks(item, citations)}
+                        </li>
                       ))}
                     </ul>
                   )}
@@ -524,7 +559,7 @@
                       {message.role === "assistant" &&
                       message.answerBlocks &&
                       message.answerBlocks.length > 0 ? (
-                        renderAnswerBlocks(message.answerBlocks)
+                        renderAnswerBlocks(message.answerBlocks, message.citations)
                       ) : (
                         <div>{message.content}</div>
                       )}
@@ -534,8 +569,9 @@
                           <strong>Sources:</strong>
                           {message.citations
                             .map((citation, i) => (
-                            <div key={i} className="citation">
+                            <div key={i} id={`citation-${i + 1}`} className="citation">
                               <div className="citation-title">
+                                <span className="citation-number">[{i + 1}]</span>
                                 <a
                                   href={createObsidianUri(citation.source_path)}
                                   target="_blank"
