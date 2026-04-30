@@ -306,7 +306,18 @@
 /* Loading and Error States */
 .loading {
     display: inline-block;
-    animation: spin 1s linear infinite;
+}
+
+.spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
 }
 
 @keyframes spin {
@@ -353,4 +364,107 @@
     .message {
         max-width: 95%;
     }
+}
+
+/* ===== Feedback Buttons ===== */
+
+.feedback-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.feedback-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 1em;
+    opacity: 0.5;
+    transition: opacity 0.2s, background-color 0.2s;
+}
+
+.feedback-btn:hover:not(:disabled) {
+    opacity: 1;
+    background-color: var(--bg-secondary, #f0f0f0);
+}
+
+.feedback-btn:disabled {
+    cursor: default;
+}
+
+.feedback-btn-active-positive {
+    opacity: 1;
+    background-color: #d4edda;
+    border-color: #27ae60;
+}
+
+.feedback-btn-active-negative {
+    opacity: 1;
+    background-color: #fde8e8;
+    border-color: #e74c3c;
+}
+
+.feedback-input-area {
+    width: 100%;
+    margin-top: 6px;
+}
+
+.feedback-textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 0.9em;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.feedback-submit-btn {
+    padding: 4px 12px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+}
+
+.feedback-submit-btn:hover:not(:disabled) {
+    background-color: var(--primary-hover);
+}
+
+.feedback-cancel-btn {
+    padding: 4px 12px;
+    background-color: #95a5a6;
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+}
+
+.feedback-cancel-btn:hover {
+    background-color: #7f8c8d;
+}
+
+/* ===== Stop Button ===== */
+
+.stop-button {
+    padding: 10px 16px;
+    background-color: #e74c3c;
+    color: var(--white);
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 14px;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.stop-button:hover {
+    background-color: #c0392b;
 }

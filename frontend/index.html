@@ -26,6 +26,116 @@
     <script type="text/babel">
       const { useState, useEffect, useRef } = React;
 
+      function FeedbackButtons({ messageId, query, answer }) {
+        const [feedback, setFeedback] = useState(null); // null | "positive" | "negative"
+        const [showInput, setShowInput] = useState(false);
+        const [improvementText, setImprovementText] = useState("");
+        const [error, setError] = useState(null);
+        const [sending, setSending] = useState(false);
+
+        const handlePositive = async () => {
+          // Toggle off if already positive
+          if (feedback === "positive") {
+            setFeedback(null);
+            return;
+          }
+          setFeedback("positive");
+          setShowInput(false);
+          setImprovementText("");
+          setError(null);
+          try {
+            await http.post("/api/feedback", {
+              message_id: messageId,
+              query,
+              answer,
+              feedback_type: "positive",
+            });
+          } catch (e) {
+            setError("送信に失敗しました");
+            setFeedback(null);
+          }
+        };
+
+        const handleNegative = () => {
+          // Toggle off if already negative
+          if (feedback === "negative") {
+            setFeedback(null);
+            setShowInput(false);
+            setImprovementText("");
+            setError(null);
+            return;
+          }
+          setFeedback("negative");
+          setShowInput(true);
+          setError(null);
+        };
+
+        const handleCancel = () => {
+          setFeedback(null);
+          setShowInput(false);
+          setImprovementText("");
+          setError(null);
+        };
+
+        const handleSubmitImprovement = async () => {
+          if (sending) return;
+          setSending(true);
+          setError(null);
+          try {
+            await http.post("/api/feedback", {
+              message_id: messageId,
+              query,
+              answer,
+              feedback_type: "negative",
+              improvement_request: improvementText.trim() || null,
+            });
+            setShowInput(false);
+          } catch (e) {
+            setError("送信に失敗しました");
+          } finally {
+            setSending(false);
+          }
+        };
+
+        return (
+          <div className="feedback-buttons">
+            <button
+              className={`feedback-btn ${feedback === "positive" ? "feedback-btn-active-positive" : ""}`}
+              onClick={handlePositive}
+              title={feedback === "positive" ? "取り消す" : "Good answer"}
+            >👍</button>
+            <button
+              className={`feedback-btn ${feedback === "negative" ? "feedback-btn-active-negative" : ""}`}
+              onClick={handleNegative}
+              title={feedback === "negative" ? "取り消す" : "Needs improvement"}
+            >👎</button>
+            {error && <span style={{ fontSize: "0.8em", color: "#e74c3c", marginLeft: "6px" }}>{error}</span>}
+            {showInput && (
+              <div className="feedback-input-area">
+                <textarea
+                  className="feedback-textarea"
+                  value={improvementText}
+                  onChange={(e) => setImprovementText(e.target.value)}
+                  placeholder="どのように改善してほしいですか？（任意）"
+                  rows={2}
+                />
+                <div style={{ display: "flex", gap: "6px", marginTop: "4px" }}>
+                  <button
+                    className="feedback-submit-btn"
+                    onClick={handleSubmitImprovement}
+                    disabled={sending}
+                  >{sending ? "送信中..." : "送信"}</button>
+                  <button
+                    className="feedback-cancel-btn"
+                    onClick={handleCancel}
+                  >キャンセル</button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
       function App() {
         const [messages, setMessages] = useState([]);
         const [inputValue, setInputValue] = useState("");
@@ -33,6 +143,7 @@
         const [scopeFolder, setScopeFolder] = useState("");
         const [scopeTags, setScopeTags] = useState("");
         const [isLoading, setIsLoading] = useState(false);
+        const abortControllerRef = React.useRef(null);
         const [status, setStatus] = useState({ index_status: "not_indexed" });
         const [config, setConfig] = useState({});
         const [showConfig, setShowConfig] = useState(false);
@@ -117,46 +228,65 @@
           setInputValue("");
           setIsLoading(true);
 
+          // Create a new AbortController for this request
+          const controller = new AbortController();
+          abortControllerRef.current = controller;
+
           try {
             const scope = {};
             if (scopeFolder.trim()) scope.folder = scopeFolder.trim();
             if (scopeTags.trim()) scope.tags = scopeTags.split(",").map(t => t.trim()).filter(Boolean);
 
-            const response = await http.post("/api/chat", {
-              query: messageToSend,
-              search_mode: searchMode,
-              scope: Object.keys(scope).length > 0 ? scope : null,
-              history: messages.slice(-20),
+            const response = await fetch("/api/chat", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                query: messageToSend,
+                search_mode: searchMode,
+                scope: Object.keys(scope).length > 0 ? scope : null,
+                history: messages.slice(-20).map(m => ({ role: m.role, content: m.content || "" })),
+              }),
+              signal: controller.signal,
             });
 
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+
             const assistantMessage = {
+              messageId: `msg_${Date.now()}`,
               role: "assistant",
-              content: response.answer,
-              answerBlocks: response.answer_blocks || [],
-              citations: response.citations,
+              content: data.answer,
+              answerBlocks: data.answer_blocks || [],
+              citations: data.citations,
+              originalQuery: messageToSend,
             };
 
             setMessages((prev) => [...prev, assistantMessage]);
           } catch (error) {
-            let errorText = "Unknown error occurred";
             if (error.name === "AbortError") {
-              errorText = "Request timed out after 30 minutes";
-            } else if (error.message) {
-              errorText = error.message;
-            } else if (typeof error === "string") {
-              errorText = error;
-            } else if (error && error.toString) {
-              errorText = error.toString();
+              // User cancelled — add a cancelled message
+              setMessages((prev) => [...prev, {
+                role: "assistant",
+                content: "（推論をキャンセルしました）",
+                isError: false,
+              }]);
+            } else {
+              const errorMessage = {
+                role: "assistant",
+                content: `Error: ${error.message || "Unknown error occurred"}`,
+                isError: true,
+              };
+              setMessages((prev) => [...prev, errorMessage]);
             }
-
-            const errorMessage = {
-              role: "assistant",
-              content: `Error: ${errorText}`,
-              isError: true,
-            };
-            setMessages((prev) => [...prev, errorMessage]);
           } finally {
             setIsLoading(false);
+            abortControllerRef.current = null;
+          }
+        };
+
+        const handleCancel = () => {
+          if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
           }
         };
 
@@ -248,7 +378,7 @@
                   disabled={isLoading}
                 >
                   {isLoading ? (
-                    <span className="loading">Indexing...</span>
+                    <><span className="spinner"></span>Indexing...</>
                   ) : (
                     "Index Vault"
                   )}
@@ -403,7 +533,6 @@
                         <div className="citations">
                           <strong>Sources:</strong>
                           {message.citations
-                            .filter((c, i, arr) => arr.findIndex(x => x.source_path === c.source_path) === i)
                             .map((citation, i) => (
                             <div key={i} className="citation">
                               <div className="citation-title">
@@ -441,6 +570,14 @@
                             {message.content}
                           </span>
                         </div>
+                      )}
+
+                      {message.role === "assistant" && !message.isError && message.messageId && (
+                        <FeedbackButtons
+                          messageId={message.messageId}
+                          query={message.originalQuery || ""}
+                          answer={message.content || ""}
+                        />
                       )}
                     </div>
                   ))}
@@ -510,11 +647,20 @@
                       }
                     >
                       {isLoading ? (
-                        <span className="loading">Sending...</span>
+                        <><span className="spinner"></span>Sending...</>
                       ) : (
                         "Send"
                       )}
                     </button>
+                    {isLoading && (
+                      <button
+                        className="stop-button"
+                        onClick={handleCancel}
+                        title="推論をキャンセル"
+                      >
+                        ■ Stop
+                      </button>
+                    )}
                   </div>
 
                   {status.index_status !== "ready" && (
