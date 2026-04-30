@@ -194,8 +194,26 @@ Please base your answer only on this context and return valid JSON."""
                 except Exception as e:
                     logger.warning(f"Failed to retrieve improvement rules: {e}")
 
-            # Build prompt with original query
-            prompt = self._build_prompt(query, chunks, history, improvement_rules=improvement_rules)
+            # Deduplicate chunks by source_path before passing to LLM.
+            # This ensures the chunk numbers in the prompt (Chunk 1, Chunk 2, ...)
+            # exactly match the final Sources list numbers ([1], [2], ...).
+            seen_paths: Dict[str, int] = {}  # source_path -> 1-based index in deduped list
+            deduped_chunks: List[Chunk] = []
+            # chunk_index_map: original chunk index (1-based) -> deduped index (1-based)
+            chunk_index_map: Dict[int, int] = {}
+            for orig_idx, chunk in enumerate(chunks, 1):
+                if chunk.source_path not in seen_paths:
+                    deduped_chunks.append(chunk)
+                    deduped_idx = len(deduped_chunks)
+                    seen_paths[chunk.source_path] = deduped_idx
+                    chunk_index_map[orig_idx] = deduped_idx
+                else:
+                    chunk_index_map[orig_idx] = seen_paths[chunk.source_path]
+
+            logger.info(f"Deduped chunks: {len(chunks)} -> {len(deduped_chunks)} unique sources")
+
+            # Build prompt using deduplicated chunks
+            prompt = self._build_prompt(query, deduped_chunks, history, improvement_rules=improvement_rules)
             
             logger.info(f"Generated prompt (length: {len(prompt)}):")
             logger.info(f"First 500 chars of prompt: {prompt[:500]}...")
@@ -206,12 +224,17 @@ Please base your answer only on this context and return valid JSON."""
             logger.info(f"LLM response (length: {len(llm_response)}):")
             logger.info(f"LLM response: {llm_response}")
             
-            # Extract answer, blocks, and citations
-            answer, answer_blocks, citations = self._extract_answer_blocks_and_citations(llm_response, chunks)
+            # Extract answer, blocks, and citations (using deduped chunks for correct mapping)
+            answer, answer_blocks, citations = self._extract_answer_blocks_and_citations(llm_response, deduped_chunks)
             
             # Ensure citations are properly formatted
-            formatted_citations = self._format_citations(citations, chunks)
-            
+            formatted_citations = self._format_citations(citations, deduped_chunks)
+
+            # Renumber [N] references in answer text to match the final Sources list (1-indexed)
+            num_sources = len(formatted_citations)
+            answer = self._renumber_citations_in_text(answer, num_sources)
+            answer_blocks = self._renumber_answer_blocks(answer_blocks, num_sources)
+
             response = ChatResponse(answer=answer, answer_blocks=answer_blocks, citations=formatted_citations)
             
             logger.info(f"Generated response with {len(formatted_citations)} citations")
@@ -306,6 +329,40 @@ Please base your answer only on this context and return valid JSON."""
                 break
         return selected
     
+    def _renumber_citations_in_text(self, text: str, num_sources: int) -> str:
+        """
+        LLMが出力した [N] の番号を、実際のSourcesリスト（1〜num_sources）の
+        範囲内に収まるよう正規化する。
+
+        範囲外の番号（例: [22]）は最も近い有効な番号にクランプする。
+        num_sources が 0 の場合は番号をそのまま返す。
+        """
+        if num_sources <= 0:
+            return text
+
+        def replace_num(match: re.Match) -> str:
+            n = int(match.group(1))
+            clamped = max(1, min(n, num_sources))
+            return f"[{clamped}]"
+
+        return re.sub(r'\[(\d+)\]', replace_num, text)
+
+    def _renumber_answer_blocks(self, answer_blocks: List[AnswerBlock], num_sources: int) -> List[AnswerBlock]:
+        """answer_blocks 内のすべてのテキストフィールドの引用番号を正規化する。"""
+        if num_sources <= 0:
+            return answer_blocks
+        result = []
+        for block in answer_blocks:
+            new_content = self._renumber_citations_in_text(block.content or "", num_sources)
+            new_items = [self._renumber_citations_in_text(item, num_sources) for item in (block.items or [])]
+            result.append(AnswerBlock(
+                type=block.type,
+                title=block.title,
+                content=new_content,
+                items=new_items,
+            ))
+        return result
+
     def _prepare_chunk_text(self, text: str) -> str:
         """
         Prepare chunk text for inclusion in prompt.
