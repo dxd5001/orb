@@ -295,3 +295,29 @@ def extract_title_from_filename(file_path: str) -> str:
     filename = os.path.basename(file_path)
     title = os.path.splitext(filename)[0]
     return title
+
+
+class FeedbackRequest(BaseModel):
+    """POST /api/feedback のリクエストボディ"""
+    message_id: str = Field(..., description="チャットメッセージID")
+    query: str = Field(..., description="ユーザーのクエリ")
+    answer: str = Field(..., description="アシスタントの回答")
+    feedback_type: Literal["positive", "negative"] = Field(..., description="フィードバック種別")
+    improvement_request: Optional[str] = Field(None, description="改善リクエスト（negativeの場合）")
+
+
+class ImprovementRule(BaseModel):
+    """改善ルールのデータモデル"""
+    id: Optional[int] = Field(None, description="DB上のID")
+    query_text: str = Field(..., description="元のクエリテキスト")
+    answer_text: str = Field(..., description="元の回答テキスト")
+    improvement_request: str = Field(..., description="改善リクエスト内容")
+    created_at: Optional[datetime] = Field(None, description="作成日時")
+
+
+class FeedbackRuleResponse(BaseModel):
+    """GET /api/feedback/rules のレスポンス要素"""
+    id: int
+    query_text: str
+    improvement_request: str
+    created_at: datetime
