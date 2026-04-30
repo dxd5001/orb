@@ -1,16 +1,12 @@
 """
 Chat API router for Orb - RAG Chatbot for Obsidian Vaults.
-
-This module provides the /api/chat endpoint for handling chat requests
-with RAG functionality.
 """
 
 import logging
-from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import JSONResponse
+import time
+from fastapi import APIRouter, HTTPException, Request
 
 from models import ChatRequest, ChatResponse
-from routers.dependencies import get_components
 from utils.date_normalizer import DateNormalizer
 
 logger = logging.getLogger(__name__)
@@ -19,72 +15,47 @@ router = APIRouter()
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(
-    request: ChatRequest,
-    components: dict = Depends(get_components)
-) -> ChatResponse:
-    """
-    Process a chat request with RAG functionality.
-    
-    Args:
-        request: Chat request with query, scope, and history
-        components: Application components (retriever, generator)
-        
-    Returns:
-        Chat response with answer and citations
-        
-    Raises:
-        HTTPException: If processing fails
-    """
+async def chat(body: ChatRequest, request: Request) -> ChatResponse:
     try:
-        retriever = components['retriever']
-        generator = components['generator']
-        
-        import time
-        request_id = int(time.time() * 1000)  # Simple unique ID
-        logger.info(f"[{request_id}] Processing chat request: '{request.query[:50]}...'")
-        logger.info(f"[{request_id}] Request history length: {len(request.history) if request.history else 0}")
-        
-        # Validate request
-        errors = _validate_chat_request(request)
+        retriever = request.app.state.retriever
+        generator = request.app.state.generator
+
+        request_id = int(time.time() * 1000)
+        logger.info(f"[{request_id}] Processing chat request: '{body.query[:50]}...'")
+
+        errors = _validate_chat_request(body)
         if errors:
             raise HTTPException(status_code=400, detail={"errors": errors})
-        
-        # Normalize temporal expressions for diary-specific queries
+
         normalizer = DateNormalizer()
-        context_history = [turn.content for turn in (request.history or [])]
-        normalized_query = normalizer.normalize_query(request.query, context_history)
-        
-        if normalized_query != request.query:
-            logger.info(f"[{request_id}] Normalized query: '{request.query}' -> '{normalized_query}'")
-        
-        # Retrieve relevant chunks
+        context_history = [turn.content for turn in (body.history or [])]
+        normalized_query = normalizer.normalize_query(body.query, context_history)
+
+        if normalized_query != body.query:
+            logger.info(f"[{request_id}] Normalized query: '{body.query}' -> '{normalized_query}'")
+
         chunks = retriever.retrieve(
             query=normalized_query,
-            scope=request.scope,
+            scope=body.scope,
             top_k=5,
-            search_mode=request.search_mode
+            search_mode=body.search_mode
         )
-        
+
         logger.info(f"Retrieved {len(chunks)} chunks")
-        
-        # Generate response using original query for better LLM understanding
+
         response = generator.generate(
-            query=request.query,
+            query=body.query,
             chunks=chunks,
-            history=request.history
+            history=body.history
         )
-        
-        logger.info(f"Generated response with {len(response.citations)} citations")
-        
+
         logger.info(f"[{request_id}] Chat request completed successfully")
         return response
-        
+
     except HTTPException:
-        logger.error(f"[{request_id}] Chat request failed with HTTP exception")
         raise
     except Exception as e:
-        logger.error(f"[{request_id}] Chat request failed: {e}")
+        logger.error(f"Chat request failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

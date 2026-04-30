@@ -7,7 +7,7 @@ based on user queries, with support for scope filtering.
 
 import logging
 import json
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
 
 try:
     import chromadb
@@ -17,6 +17,9 @@ except ImportError:
     CHROMADB_AVAILABLE = False
     chromadb = None
     Settings = None
+
+if TYPE_CHECKING:
+    from llm.base import LLMBackend
 
 from models import Chunk, Scope, SearchMode
 from embedding.base import EmbeddingBackend
@@ -38,22 +41,24 @@ class Retriever:
     # ChromaDB collection name (must match Indexer)
     COLLECTION_NAME = "obsidian_vault"
     
-    def __init__(self, embedding_backend: EmbeddingBackend, vector_store_path: str):
+    def __init__(self, embedding_backend: EmbeddingBackend, vector_store_path: str, llm_backend: Optional["LLMBackend"] = None):
         """
         Initialize the retriever.
-        
+
         Args:
             embedding_backend: Backend for generating embeddings
             vector_store_path: Path for ChromaDB storage
+            llm_backend: Optional LLM backend for HyDE query expansion
         """
         if not CHROMADB_AVAILABLE:
             raise ImportError(
                 "chromadb library is not available. "
                 "Install it with: pip install chromadb"
             )
-        
+
         self.embedding_backend = embedding_backend
         self.vector_store_path = vector_store_path
+        self.llm_backend = llm_backend
         self._client = None
         self._collection = None
     
@@ -111,11 +116,16 @@ class Retriever:
         """
         if not query or not query.strip():
             raise ValueError("Query cannot be empty")
-        
+
         logger.info(f"RETRIEVER CALLED with query: '{query}', search_mode: {search_mode}")
-        
+
+        # Query Expansion: use LLM to expand query with related terms
+        hyde_query = self._expand_query_with_llm(query)
+        if hyde_query != query:
+            logger.info(f"Query expansion: '{query[:50]}' -> '{hyde_query[:80]}'")
+
         # Normalize date queries to match Obsidian diary format
-        normalized_query = self._normalize_date_query(query)
+        normalized_query = self._normalize_date_query(hyde_query)
         
         logger.info(f"AFTER NORMALIZATION: original='{query}', normalized='{normalized_query}'")
         
@@ -143,6 +153,37 @@ class Retriever:
             logger.error(f"Retrieval failed: {e}")
             raise RuntimeError(f"Retrieval failed: {e}")
     
+    def _expand_query_with_llm(self, query: str) -> str:
+        """
+        Query Expansion: use LLM to expand the query with related concrete terms.
+
+        Asks the LLM to list specific words that would appear in a diary entry
+        related to the query (e.g. "アルコール" → "ビール 日本酒 ワイン 飲んだ").
+        Returns the original query + expanded keywords for embedding and keyword scan.
+
+        Falls back to the original query if LLM is unavailable or fails.
+        """
+        if self.llm_backend is None:
+            return query
+
+        try:
+            prompt = f"""以下の質問に関連する具体的な単語や表現を、日記に実際に書かれそうな言葉で5〜10個列挙してください。
+単語のみをスペース区切りで出力してください。説明や文章は不要です。
+
+質問: {query}
+
+関連単語:"""
+            result = self.llm_backend.generate(prompt)
+            result = result.strip().strip('"').strip("'").strip()
+            if result and len(result) > 2:
+                logger.info(f"HyDE keyword expansion: '{query}' -> '{result[:100]}'")
+                # Return original query + expanded keywords for embedding
+                return f"{query} {result}"
+        except Exception as e:
+            logger.warning(f"HyDE generation failed, using original query: {e}")
+
+        return query
+
     def _normalize_date_query(self, query: str) -> str:
         """
         Normalize date queries to match Obsidian diary format.
@@ -388,11 +429,7 @@ class Retriever:
 
         keyword = query.strip()
         replacement_patterns = [
-            r"という名前",
-            r"っていう名前",
-            r"という言葉",
-            r"とは",
-            r"について",
+            # 具体的な複合パターンを先に処理
             r"が初めて登場したのはいつ[？?]?",
             r"が最初に登場したのはいつ[？?]?",
             r"が最後に登場したのはいつ[？?]?",
@@ -401,7 +438,21 @@ class Retriever:
             r"が出てきた日記",
             r"はいつ登場した[？?]?",
             r"はいつ出現した[？?]?",
+            # 「最後に〜を〜のはいつ」→「〜」だけ残す（最後に・を以降を除去）
+            r"最後に",
+            r"最初に",
             r"初めて",
+            r"を.+のはいつ[？?]?",
+            r"を飲んだのは",
+            r"を食べたのは",
+            r"を.+たのは",
+            r"に.+のは",
+            # 単語除去
+            r"という名前",
+            r"っていう名前",
+            r"という言葉",
+            r"とは",
+            r"について",
             r"最初",
             r"最後",
             r"登場",
@@ -466,6 +517,46 @@ class Retriever:
         )
 
         chunks = self._results_to_chunks(results)
+
+        # Build scan keywords from HyDE-expanded query
+        scan_keywords = set()
+        if keyword and len(keyword) >= 2 and keyword != normalized_query:
+            scan_keywords.add(keyword)
+        # Extract individual words from the HyDE-expanded normalized_query
+        if normalized_query != query:
+            import re
+            # Split on spaces and common Japanese punctuation
+            words = re.split(r'[\s　、。,，!！?？「」『』（）()・\n]', normalized_query)
+            for w in words:
+                w = w.strip()
+                if len(w) >= 2:
+                    scan_keywords.add(w)
+
+        if scan_keywords:
+            try:
+                all_results = self.collection.get(
+                    include=['documents', 'metadatas'],
+                    where=where_filter if where_filter else None
+                )
+                keyword_chunks = []
+                existing_ids = {c.chunk_id for c in chunks}
+                for i, doc in enumerate(all_results.get('documents', [])):
+                    if not doc:
+                        continue
+                    if any(kw in doc for kw in scan_keywords):
+                        meta = all_results['metadatas'][i]
+                        chunk = self._results_to_chunks({
+                            'ids': [[all_results['ids'][i]]],
+                            'documents': [[doc]],
+                            'metadatas': [[meta]]
+                        })
+                        if chunk and chunk[0].chunk_id not in existing_ids:
+                            keyword_chunks.extend(chunk)
+                            existing_ids.add(chunk[0].chunk_id)
+                chunks.extend(keyword_chunks)
+                logger.info(f"Keyword scan for {scan_keywords} added {len(keyword_chunks)} chunks, total: {len(chunks)}")
+            except Exception as e:
+                logger.warning(f"Keyword scan failed: {e}")
         if prefer_diary and not (scope and scope.folder):
             diary_chunks = [chunk for chunk in chunks if self._is_diary_source_path(chunk.source_path)]
             if diary_chunks:
@@ -796,9 +887,15 @@ class Retriever:
         query_lower = original_query.lower()
         is_diary_related = any(keyword in query_lower for keyword in diary_keywords)
         is_date_query = self._is_date_query(normalized_query)
-        
-        logger.info(f"AUTO mode: is_diary_related={is_diary_related}, is_date_query={is_date_query}")
-        
+        is_temporal = self._is_temporal_query(original_query)
+
+        logger.info(f"AUTO mode: is_diary_related={is_diary_related}, is_date_query={is_date_query}, is_temporal={is_temporal}")
+
+        # Temporal queries (最後に、初めて、いつ etc.) → diary mode with temporal retrieval
+        if is_temporal:
+            logger.info("AUTO mode: Detected temporal query, using diary strategy with temporal retrieval")
+            return self._retrieve_diary_mode(original_query, normalized_query, scope, top_k)
+
         # If it looks diary-related or has date expressions, use diary mode
         if is_diary_related or is_date_query:
             logger.info("AUTO mode: Detected diary-related query, using diary strategy")

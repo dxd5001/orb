@@ -9,10 +9,13 @@ import logging
 import re
 import json
 from datetime import datetime, date
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
 
-from models import Chunk, ChatTurn, ChatResponse, Citation, AnswerBlock
+from models import Chunk, ChatTurn, ChatResponse, Citation, AnswerBlock, ImprovementRule
 from llm.base import LLMBackend
+
+if TYPE_CHECKING:
+    from feedback.retriever import RuleRetriever
 
 logger = logging.getLogger(__name__)
 
@@ -98,14 +101,16 @@ Context will be provided as numbered chunks with their source information.
 Please base your answer only on this context and return valid JSON."""
     }
 
-    def __init__(self, llm_backend: LLMBackend):
+    def __init__(self, llm_backend: LLMBackend, rule_retriever: Optional["RuleRetriever"] = None):
         """
         Initialize the generator.
-        
+
         Args:
             llm_backend: Backend for LLM generation
+            rule_retriever: Optional retriever for improvement rules
         """
         self.llm_backend = llm_backend
+        self.rule_retriever = rule_retriever
     
     def _detect_language(self, query: str) -> str:
         """
@@ -179,8 +184,18 @@ Please base your answer only on this context and return valid JSON."""
                     citations=[]
                 )
             
+            # Retrieve improvement rules if rule_retriever is available
+            improvement_rules: List[ImprovementRule] = []
+            if self.rule_retriever is not None:
+                try:
+                    improvement_rules = self.rule_retriever.retrieve_rules(query, top_k=3)
+                    if improvement_rules:
+                        logger.info(f"Injecting {len(improvement_rules)} improvement rules into prompt")
+                except Exception as e:
+                    logger.warning(f"Failed to retrieve improvement rules: {e}")
+
             # Build prompt with original query
-            prompt = self._build_prompt(query, chunks, history)
+            prompt = self._build_prompt(query, chunks, history, improvement_rules=improvement_rules)
             
             logger.info(f"Generated prompt (length: {len(prompt)}):")
             logger.info(f"First 500 chars of prompt: {prompt[:500]}...")
@@ -210,22 +225,32 @@ Please base your answer only on this context and return valid JSON."""
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise RuntimeError(f"Generation failed: {str(e)}")
     
-    def _build_prompt(self, query: str, chunks: List[Chunk], history: Optional[List[ChatTurn]]) -> str:
+    def _build_prompt(self, query: str, chunks: List[Chunk], history: Optional[List[ChatTurn]], improvement_rules: Optional[List[ImprovementRule]] = None) -> str:
         """
-        Build prompt from query, chunks, and conversation history.
-        
+        Build prompt from query, chunks, conversation history, and improvement rules.
+
         Args:
             query: User's question
             chunks: Retrieved chunks for context
             history: Optional conversation history
-            
+            improvement_rules: Optional list of improvement rules to inject
+
         Returns:
             Complete prompt for LLM
         """
         # Get appropriate system prompt based on query language
         system_prompt = self._get_system_prompt(query)
         prompt_parts = [system_prompt]
-        
+
+        # Inject improvement rules before CONTEXT if available
+        if improvement_rules:
+            trimmed_rules = self._trim_rules_to_fit(improvement_rules, system_prompt)
+            if trimmed_rules:
+                prompt_parts.append("\n--- IMPROVEMENT RULES ---")
+                prompt_parts.append("以下は過去のフィードバックに基づく改善指示です。回答時に参考にしてください:")
+                for rule in trimmed_rules:
+                    prompt_parts.append(f"- {rule.improvement_request}")
+
         # Add context chunks
         if chunks:
             prompt_parts.append("\n--- CONTEXT ---")
@@ -233,7 +258,7 @@ Please base your answer only on this context and return valid JSON."""
                 chunk_text = self._prepare_chunk_text(chunk.text)
                 prompt_parts.append(f"\nChunk {i}:\n{chunk_text}\n")
                 prompt_parts.append(f"Source: {chunk.source_path} - {chunk.title}")
-        
+
         # Add conversation history
         if history:
             prompt_parts.append("\n--- CONVERSATION HISTORY ---")
@@ -242,13 +267,44 @@ Please base your answer only on this context and return valid JSON."""
             for turn in recent_history:
                 role_name = "User" if turn.role == "user" else "Assistant"
                 prompt_parts.append(f"\n{role_name}: {turn.content}")
-        
+
         # Add current query
         prompt_parts.append(f"\n--- CURRENT QUESTION ---")
         prompt_parts.append(f"\nUser: {query}")
         prompt_parts.append("\nAssistant:")
-        
+
         return "\n".join(prompt_parts)
+
+    def _estimate_tokens(self, text: str) -> int:
+        """文字数ベースのトークン推定（1トークン ≈ 2文字）。"""
+        return len(text) // 2
+
+    def _trim_rules_to_fit(
+        self,
+        rules: List[ImprovementRule],
+        base_prompt: str,
+        max_tokens: int = 4096,
+    ) -> List[ImprovementRule]:
+        """
+        トークン上限に収まるようにルール件数を削減する。
+
+        Args:
+            rules: 注入候補のルールリスト
+            base_prompt: ルールを除いたベースプロンプト
+            max_tokens: トークン上限（デフォルト4096）
+
+        Returns:
+            上限内に収まるルールリスト
+        """
+        base_tokens = self._estimate_tokens(base_prompt)
+        selected: List[ImprovementRule] = []
+        for rule in rules:
+            rule_text = f"- {rule.improvement_request}\n"
+            if base_tokens + self._estimate_tokens("\n".join(f"- {r.improvement_request}" for r in selected + [rule])) <= max_tokens:
+                selected.append(rule)
+            else:
+                break
+        return selected
     
     def _prepare_chunk_text(self, text: str) -> str:
         """
@@ -288,12 +344,25 @@ Please base your answer only on this context and return valid JSON."""
         if structured_output:
             answer = structured_output.get("answer", "").strip()
             answer_blocks = self._build_answer_blocks(structured_output.get("answer_blocks", []), answer)
-            citations = self._extract_structured_citations(answer, chunks)
+
+            # Extract citations from answer text AND all answer_blocks content
+            full_text_for_citations = answer
+            for block in structured_output.get("answer_blocks", []):
+                full_text_for_citations += " " + block.get("content", "")
+                for item in block.get("items", []):
+                    full_text_for_citations += " " + item
+
+            citations = self._extract_structured_citations(full_text_for_citations, chunks)
             if not citations:
-                citations = self._infer_citations_from_content(answer, chunks)
-            # Fallback: always cite all chunks if still empty
+                citations = self._infer_citations_from_content(full_text_for_citations, chunks)
+            # Fallback: cite all unique source paths from chunks
             if not citations:
-                citations = [self._create_citation_from_chunk(c) for c in chunks]
+                seen = set()
+                citations = []
+                for c in chunks:
+                    if c.source_path not in seen:
+                        citations.append(self._create_citation_from_chunk(c))
+                        seen.add(c.source_path)
             return answer, answer_blocks, citations
         
         # Try to extract structured citations first
@@ -304,9 +373,14 @@ Please base your answer only on this context and return valid JSON."""
         answer = self._clean_response_text(llm_response)
         logger.info(f"Cleaned answer length: {len(answer)}")
 
-        # Fallback: always cite all chunks if still empty
+        # Fallback: cite all unique source paths from chunks
         if not citations:
-            citations = [self._create_citation_from_chunk(c) for c in chunks]
+            seen = set()
+            citations = []
+            for c in chunks:
+                if c.source_path not in seen:
+                    citations.append(self._create_citation_from_chunk(c))
+                    seen.add(c.source_path)
 
         answer_blocks = [AnswerBlock(type="summary", title="回答", content=answer, items=[])]
         return answer, answer_blocks, citations
@@ -533,20 +607,22 @@ Please base your answer only on this context and return valid JSON."""
             Formatted citations
         """
         formatted_citations = []
-        
+        seen_source_paths = set()
+
         for citation in citations:
             # Validate citation has required fields
             if not citation.file_path or not citation.title:
                 continue
-            
+
             # Ensure snippet is not too long
             if len(citation.snippet) > 300:
                 citation.snippet = citation.snippet[:300] + "..."
-            
-            # Avoid duplicate citations
-            if citation not in formatted_citations:
+
+            # Deduplicate by source_path — keep first occurrence only
+            if citation.source_path not in seen_source_paths:
                 formatted_citations.append(citation)
-        
+                seen_source_paths.add(citation.source_path)
+
         return formatted_citations
     
     def get_system_prompt(self, language: str = 'en') -> str:
