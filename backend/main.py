@@ -26,6 +26,8 @@ from retrieval.retriever import Retriever
 from generation.generator import Generator
 from embedding.base import EmbeddingBackendFactory
 from llm.base import LLMBackendFactory
+from feedback.store import FeedbackStore
+from feedback.retriever import RuleRetriever
 
 # Configure logging
 logging.basicConfig(
@@ -103,11 +105,20 @@ async def lifespan(app: FastAPI):
         vector_store_path = config_manager.get_config('VECTOR_STORE_PATH')
         app.state.indexer = Indexer(app.state.embedding_backend, vector_store_path)
         
-        # Initialize retriever
-        app.state.retriever = Retriever(app.state.embedding_backend, vector_store_path)
-        
-        # Initialize generator
-        app.state.generator = Generator(app.state.llm_backend)
+        # Initialize retriever (with LLM backend for HyDE query expansion)
+        app.state.retriever = Retriever(app.state.embedding_backend, vector_store_path, llm_backend=app.state.llm_backend)
+
+        # Initialize feedback store and rule retriever
+        feedback_db_path = str(Path(__file__).parent / "feedback.db")
+        app.state.feedback_store = FeedbackStore(db_path=feedback_db_path)
+        app.state.rule_retriever = RuleRetriever(
+            store=app.state.feedback_store,
+            embedding_backend=app.state.embedding_backend,
+        )
+        logger.info("FeedbackStore and RuleRetriever initialized")
+
+        # Initialize generator with rule retriever
+        app.state.generator = Generator(app.state.llm_backend, rule_retriever=app.state.rule_retriever)
         
         logger.info("All components initialized successfully")
         
@@ -150,11 +161,13 @@ def create_app() -> FastAPI:
     from routers.index import router as index_router
     from routers.status import router as status_router
     from routers.config import router as config_router
-    
+    from routers.feedback import router as feedback_router
+
     app.include_router(chat_router, prefix="/api", tags=["chat"])
     app.include_router(index_router, prefix="/api", tags=["index"])
     app.include_router(status_router, prefix="/api", tags=["status"])
     app.include_router(config_router, prefix="/api", tags=["config"])
+    app.include_router(feedback_router, prefix="/api", tags=["feedback"])
     
     # Mount static files for frontend
     frontend_path = Path(__file__).parent.parent / "frontend"
