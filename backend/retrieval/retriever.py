@@ -418,7 +418,11 @@ class Retriever:
 
     def _is_temporal_query(self, query: str) -> bool:
         temporal_terms = [
+            # 最初・最後系
             "初めて", "最初", "最後", "いつ", "登場", "現れ", "出現",
+            # 最近系（「最近の〇〇は？」のようなクエリをカバー）
+            "最近", "近頃", "最新", "直近", "lately", "recently", "recent",
+            # 英語の最初・最後系
             "first", "earliest", "last", "latest", "when", "appeared", "appearance"
         ]
         lowered_query = query.lower()
