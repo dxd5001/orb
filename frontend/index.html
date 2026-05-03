@@ -7,6 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Orb - RAG Chatbot</title>
+    <link rel="icon" type="image/png" href="favicon.png" />
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -273,16 +274,26 @@
             }
           });
           
-          // Split text by citation patterns [chunk_id]
+          // Split text by citation patterns [chunk_id] or [number]
           const parts = text.split(/(\[[^\]]+\])/g);
+          
           return parts.map((part, i) => {
             const match = part.match(/^\[([^\]]+)\]$/);
             
             if (match) {
-              const chunkId = match[1];
-              const citationNumber = chunkIdToNumber[chunkId];
+              const citationId = match[1];
+              let citationNumber = null;
               
-              if (citationNumber) {
+              // Check if it's already a number [1], [2], etc.
+              if (/^\d+$/.test(citationId)) {
+                citationNumber = parseInt(citationId, 10);
+              } else {
+                // Try to find chunk ID in mapping
+                citationNumber = chunkIdToNumber[citationId];
+              }
+              
+              // Only create link if we have a valid citation number
+              if (citationNumber && citationNumber >= 1 && citationNumber <= citations.length) {
                 const citation = citations[citationNumber - 1];
                 return (
                   <a
@@ -454,10 +465,10 @@
 
         return (
           <div className="flex h-screen bg-gray-50">
-            <div className="w-80 bg-slate-800 text-white p-6 overflow-y-auto shadow-xl">
-              <h2 className="text-2xl font-bold mb-6 text-blue-400">Orb - RAG Chatbot</h2>
+            <div className="w-80 bg-blue-950 text-white p-6 overflow-y-auto">
+              <h2 className="text-2xl font-bold mb-6 text-blue-400"><img src="assets/orb-logo.png" alt="Orb Logo" className="h-16" /></h2>
 
-              <div className="mb-6 p-4 bg-slate-700 rounded-lg border border-slate-600">
+              <div className="mb-6 p-4">
                 <div className="flex items-center mb-3">
                   {getStatusIndicator()}
                   <span className="font-semibold text-white">Status</span>
@@ -613,7 +624,7 @@
                       <div className="max-w-md mx-auto">
                         <div className="mb-6">
                           <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <span className="text-2xl text-blue-600">🤖</span>
+                            <span className="text-2xl text-blue-600"><img src="assets/orb-logo.png" alt="Orb Logo" className="h-16" /></span>
                           </div>
                           <h3 className="text-xl font-semibold text-gray-800 mb-2">Welcome to Orb - RAG Chatbot!</h3>
                           <p className="text-gray-600 mb-4">
@@ -777,7 +788,7 @@
                       >
                         {isLoading ? (
                           <>
-                            <span className="animate-spin mr-2">⟳</span>
+                            <div className="animate-spin mr-2 w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
                             Sending...
                           </>
                         ) : (
