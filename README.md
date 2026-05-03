@@ -91,7 +91,7 @@ cp .env.example .env
 # Windows:       C:\Users\yourname\Documents\Obsidian Vault
 # Linux:         /home/yourname/Documents/Obsidian Vault
 VAULT_PATH=/path/to/your/obsidian/vault
-VECTOR_STORE_PATH=./chroma_db
+VECTOR_STORE_PATH=./backend/chroma_db
 
 # Local LLM (LM Studio/Ollama)
 LLM_PROVIDER=local
