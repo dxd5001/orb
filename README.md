@@ -100,7 +100,7 @@ LLM_BASE_URL=http://127.0.0.1:1235
 
 # Local Embeddings
 EMBEDDING_PROVIDER=local
-EMBEDDING_MODEL=all-MiniLM-L6-v2
+EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
 
 # Or OpenAI (uncomment and set API key)
 # LLM_PROVIDER=openai
@@ -180,14 +180,14 @@ python mcp_server.py
 | Variable             | Description                          | Default                  |
 | -------------------- | ------------------------------------ | ------------------------ |
 | `VAULT_PATH`         | Path to Obsidian vault               | Required                 |
-| `VECTOR_STORE_PATH`  | ChromaDB storage path                | `./chroma_db`            |
+| `VECTOR_STORE_PATH`  | ChromaDB storage path                | `./backend/chroma_db`            |
 | `API_PORT`           | Server port                          | `8000`                   |
 | `LLM_PROVIDER`       | LLM backend (`local`/`openai`)       | `local`                  |
 | `LLM_MODEL`          | LLM model name                       | `google/gemma-4-e4b`                 |
 | `LLM_BASE_URL`       | Local LLM API URL                    | `http://127.0.0.1:1235` |
 | `LLM_API_KEY`        | OpenAI API key                       | None                     |
 | `EMBEDDING_PROVIDER` | Embedding backend (`local`/`openai`) | `local`                  |
-| `EMBEDDING_MODEL`    | Embedding model name                 | `all-MiniLM-L6-v2`       |
+| `EMBEDDING_MODEL`    | Embedding model name                 | `paraphrase-multilingual-MiniLM-L12-v2`       |
 | `EMBEDDING_API_KEY`  | OpenAI embedding API key             | None                     |
 | `USE_KEYRING`        | Store API keys in system keyring     | `false`                  |
 
