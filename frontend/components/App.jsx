@@ -29,11 +29,14 @@ function App() {
   const createObsidianUri = (filePath) => {
     // Convert file path to Obsidian URI format
     // Example: /path/to/vault/2026-04-01.md -> obsidian://open?file=2026-04-01
+    // Example: /path/to/vault/2026-04-01::prop_3.md -> obsidian://open?file=2026-04-01
     if (!filePath || typeof filePath !== "string") return "#";
 
     try {
       // Extract filename from path
-      const filename = filePath.split("/").pop().replace(".md", "");
+      let filename = filePath.split("/").pop().replace(".md", "");
+      // Remove proposition suffix (::prop_X)
+      filename = filename.split("::")[0];
       return `obsidian://open?file=${encodeURIComponent(filename)}`;
     } catch (error) {
       console.error("Error creating Obsidian URI:", error);
