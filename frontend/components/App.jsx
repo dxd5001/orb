@@ -5,6 +5,7 @@ function App() {
   const [scopeFolder, setScopeFolder] = useState("");
   const [scopeTags, setScopeTags] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isIndexing, setIsIndexing] = useState(false);
   const [status, setStatus] = useState({ index_status: "not_indexed" });
   const [config, setConfig] = useState({});
   const [showConfig, setShowConfig] = useState(false);
@@ -156,7 +157,7 @@ function App() {
   };
 
   const handleIndexVault = async () => {
-    setIsLoading(true);
+    setIsIndexing(true);
     try {
       await http.post("/api/index", null, null); // No timeout
       await loadStatus();
@@ -175,7 +176,7 @@ function App() {
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
-      setIsLoading(false);
+      setIsIndexing(false);
     }
   };
 
@@ -242,7 +243,7 @@ function App() {
             <button
               className="config-button"
               onClick={handleIndexVault}
-              disabled={isLoading || status.index_status === "indexing"}
+              disabled={isIndexing || status.index_status === "indexing"}
             >
               {status.index_status === "indexing"
                 ? "Indexing..."
