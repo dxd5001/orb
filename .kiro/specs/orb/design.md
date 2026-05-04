@@ -160,23 +160,69 @@ class Indexer:
 
 ### Retrieval Layer: `Retriever`
 
-**責務:** ユーザーのクエリをEmbeddingに変換し、Vector Storeから関連Chunkを検索する。Scopeフィルタ（フォルダ/タグ）をサポートし、検索モードに応じて日記優先検索または汎用検索を切り替える。
+**責務:** 上流で確定した検索計画に従って、Vector Storeから関連Chunkを検索し、命題Chunkと通常Chunkを統合・再順位付けする。`Retriever` 自身はUI由来の検索モードやスコープを推測するのではなく、確定済みの plan を実行する層として振る舞う。
+
+### Query Parsing Layer: `QueryParser`
+
+**責務:** 生のユーザー入力、およびWeb UIから渡された検索モード・スコープを決定論的に解釈し、検索条件を分離する。
+
+```python
+class QueryParser:
+    def parse(
+        self,
+        raw_text: str,
+        ui_search_mode: SearchMode = SearchMode.AUTO,
+        ui_scope: Optional[Scope] = None,
+    ) -> ParsedQuery:
+        """/mode、#tag、@folder と自然文本文を分離する"""
+        ...
+```
+
+### Query Planning Layer: `QueryPlanner`
+
+**責務:** `ParsedQuery` を受け取り、日付正規化・意図分類・検索戦略選択を行い、`RetrievalPlan` を生成する。
+
+```python
+class QueryPlanner:
+    def build_plan(self, parsed_query: ParsedQuery, top_k: int = 5) -> RetrievalPlan:
+        """検索モード、スコープ、意図分類を元に実行計画を返す"""
+        ...
+```
 
 ```python
 class Retriever:
     def __init__(self, embedding_backend: EmbeddingBackend, vector_store: VectorStore):
         ...
 
-    def retrieve(self, query: str, scope: Optional[Scope] = None, top_k: int = 5, search_mode: SearchMode = SearchMode.AUTO) -> List[Chunk]:
-        """クエリに関連するChunkを返す"""
+    def retrieve(self, plan: RetrievalPlan) -> List[Chunk]:
+        """検索計画に従って関連Chunkを返す"""
         ...
 ```
 
 #### 検索モード戦略
 
-- **Auto:** クエリに含まれる日付表現、日記関連語、メタデータ条件をもとに日記検索優先か汎用検索優先かを自動判定する
-- **Diary:** 日付正規化を優先し、日記ファイル名ベース検索を第一候補として使用する。意味検索は日付解決またはファイル名一致に失敗した場合の補助として使う
-- **General:** 汎用ノートを対象に意味検索を優先し、日記ファイル名ベース検索を強制しない
+- **Auto:** まず日付意図・日記意図・日記型時系列意図を判定し、その後に fact/context 判定を行う。日記意図がある場合は `Diary` 相当の戦略へルーティングする
+- **Diary:** 日付正規化と日記ファイル名ベース検索を第一候補としつつ、日記スコープ内で Proposition Chunk と通常Chunkを統合する
+- **General:** 汎用ノートを対象に検索を行い、fact query では proposition-first、context query では regular-first、曖昧な場合は balanced hybrid を用いる
+
+#### Retrieval 実行フロー
+
+```text
+Chat Request
+├─ QueryParser.parse()
+│  ├─ /auto, /diary, /general を抽出
+│  ├─ #tag, @folder を抽出
+│  ├─ UI指定の search_mode / scope と統合
+│  └─ ParsedQuery を生成
+├─ QueryPlanner.build_plan()
+│  ├─ 日付正規化
+│  ├─ date / diary / temporal / fact / context の意図分類
+│  └─ RetrievalPlan を生成
+└─ Retriever.retrieve(plan)
+   ├─ Diary plan を実行
+   ├─ General plan を実行
+   └─ Auto plan を Diary / General へルーティング
+```
 
 #### メタデータ活用型検索戦略
 
@@ -185,6 +231,13 @@ class Retriever:
 - 「初めて」「最初」のようなクエリでは古い日時を優先し、「最後」「直近」のようなクエリでは新しい日時を優先する
 - フォルダスコープやタグスコープが指定されている場合は、その制約を維持したうえで時系列分析を適用する
 - 根拠となる時系列情報が不十分な場合は、断定的な分析結果を返さず通常の意味検索結果へフォールバックする
+- 日記意図を伴う時系列クエリでは、Diary scope 内の Proposition Chunk と通常Chunkを統合し、日付メタデータとファイル名一致で再順位付けする
+
+#### note-centric ranking
+
+- 検索結果は `source_path` 単位で集約し、同一ノート由来の命題Chunkと通常Chunkを関連付ける
+- `date exact match`、`filename/title match`、`diary path match`、`proposition + regular の両立` を主要な加点要素とする
+- Diary モードでは proposition を入口、regular chunk を補足本文として扱えるようにする
 
 #### `Retriever` の内部ヘルパー責務
 
@@ -194,11 +247,14 @@ class Retriever:
 - `_find_earliest_occurrence(chunks, keyword)`: 最初の出現候補を特定する
 - `_analyze_keyword_frequency(chunks, keyword)`: キーワードの出現頻度と集中期間を分析する
 - `_expand_query_with_llm(query)`: LLMを使ってクエリを関連語・具体語に拡張する（Query Expansion）
-- `_apply_folder_filter(chunks, folder)`: フォルダプレフィックスでChunkをPython側フィルタリングする
+- `_merge_note_hits(proposition_chunks, regular_chunks)`: note 単位で結果を集約する
+- `_rank_note_hits(note_hits, plan)`: 検索計画に基づいて note 単位で再順位付けする
+- `_retrieve_proposition_chunks(query, scope, top_k)`: 命題コレクションから検索する
+- `_retrieve_regular_chunks(query, scope, top_k)`: 通常コレクションから検索する
 
 #### Query Expansion（クエリ拡張）
 
-`Retriever` はオプションで `LLMBackend` を受け取り、クエリ拡張を行う。
+`QueryPlanner` または `Retriever` はオプションで `LLMBackend` を受け取り、必要に応じてクエリ拡張を行う。
 
 **動作フロー:**
 
@@ -226,7 +282,7 @@ class Retriever:
 
 - LLMバックエンドが未設定の場合は元のクエリをそのまま使用（フォールバック）
 - LLM呼び出しが失敗した場合も元のクエリにフォールバック（エラーを伝播させない）
-- クエリ拡張は `retrieve()` の冒頭で実行し、日付正規化の前に適用する
+- クエリ拡張は `RetrievalPlan` の構築時または検索直前に適用し、上流で確定した検索モード・スコープを上書きしない
 
 ### Generation Layer: `Generator`
 
@@ -1298,9 +1354,16 @@ LLM（ローカル）で命題リストを生成
 - `Indexer` に命題生成ステップを追加する（`LLMBackend` をオプションで受け取る）
 - ChromaDBに命題専用コレクション（例: `obsidian_vault_propositions`）を追加する
 - 命題Chunkのメタデータに `source_path`・`source_chunk_id` を保持し、元のノートへの参照を維持する
-- `Retriever` に命題コレクションを使った検索モード（`SearchMode.PROPOSITION`）を追加する
+- `Retriever` は `Diary` / `General` / `Auto` の各戦略の中で命題コレクションを統合利用し、独立した `SearchMode.PROPOSITION` は設けない
 - LLMバックエンドが未設定の場合は命題生成をスキップし、通常のチャンクインデックスにフォールバックする
 - インデックス再構築時に命題コレクションも再生成する（冪等性を維持）
+
+#### Retrieval 統合方針
+
+- Diary モードでは proposition と regular を diary scope 内で統合し、日付一致・ファイル名一致を優先する
+- General モードでは query intent に応じて proposition-first / regular-first / balanced hybrid を切り替える
+- Auto モードではまず日記意図の有無を判定し、必要に応じて Diary 相当戦略へルーティングする
+- 結果は `source_path` 単位で集約し、命題を入口、本文を補足コンテキストとして扱う
 
 #### 命題生成プロンプト設計（案）
 

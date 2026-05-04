@@ -122,6 +122,8 @@
 3. WHEN Scopeが指定されていない場合、THE Retriever SHALL Vault全体を検索対象とする
 4. THE Web_UI SHALL フォルダパスまたはタグをScopeとして指定できるUIコンポーネントを提供する
 5. IF 指定されたScopeに該当するNoteが存在しない場合、THEN THE Chatbot SHALL 「指定されたスコープに該当するノートが見つかりませんでした」というメッセージを返す
+6. THE System SHALL 検索モード判定より前に、UIまたはテキストコマンドから与えられたScopeを決定論的に解釈し、確定した検索条件としてRetrieval処理に渡す
+7. THE System SHALL 将来的なテキストコマンド入力において、`#tag` をタグスコープ、`@folder` をフォルダスコープとして解釈できるように設計される
 
 ---
 
@@ -231,17 +233,17 @@ frontend/
 
 ### Requirement 11: 検索モードの選択
 
-**User Story:** ユーザーとして、チャットごとに検索モードを `Auto` / `Diary` / `General` から選択したい。そうすることで、日記検索の精度を高めつつ、通常の汎用検索も使い分けられる。
-
 #### Acceptance Criteria
 
 1. THE Web_UI SHALL チャット入力UIに `Auto` / `Diary` / `General` の検索モードを選択できるコンポーネントを提供する
 2. WHEN ユーザーが検索モードを指定してチャットを送信したとき、THE API_Server SHALL その検索モードを `ChatRequest` に含めて処理する
-3. WHEN 検索モードが `Diary` のとき、THE Retriever SHALL 日付正規化および日記ファイル名ベース検索を優先し、意味検索は補助的にのみ使用する
-4. WHEN 検索モードが `General` のとき、THE Retriever SHALL 汎用ノート群を対象とした意味検索を優先し、日記ファイル名ベース検索を強制しない
-5. WHEN 検索モードが `Auto` のとき、THE API_Server または THE Retriever SHALL クエリ内容から日記検索と汎用検索のいずれを優先するか自動判定する
-6. IF 検索モードが省略された場合、THEN THE API_Server SHALL `Auto` をデフォルト値として扱う
-7. WHEN 検索モードが `Diary` で相対日付表現を含む質問が送信されたとき、THE Chatbot SHALL 解決済みの絶対日付を用いて検索と回答生成を行う
+3. THE System SHALL 検索モードをRetrieval分岐の最上流入力として扱い、UIまたは将来のテキストコマンドで明示されたモードを推測より優先する
+4. WHEN 検索モードが `Diary` のとき、THE Retriever SHALL 日付正規化および日記ファイル名ベース検索を優先しつつ、日記スコープ内で Proposition Chunk と通常Chunkを統合して検索する
+5. WHEN 検索モードが `General` のとき、THE Retriever SHALL 汎用ノート群を対象とした検索を優先し、Proposition Chunk と通常Chunkをクエリ意図に応じて統合する
+6. WHEN 検索モードが `Auto` のとき、THE System SHALL まず日付意図・日記意図・日記型時系列意図を判定し、その後に fact/context 判定を行って適切な検索戦略へルーティングする
+7. IF 検索モードが省略された場合、THEN THE API_Server SHALL `Auto` をデフォルト値として扱う
+8. WHEN 検索モードが `Diary` で相対日付表現を含む質問が送信されたとき、THE Chatbot SHALL 解決済みの絶対日付を用いて検索と回答生成を行う
+9. THE System SHALL 将来的なテキストコマンド入力において、`/auto`、`/diary`、`/general` を検索モード指定として決定論的に解釈できるように設計される
 
 ---
 
@@ -258,59 +260,28 @@ frontend/
 5. THE Chatbot SHALL 時系列分析の結果を、元のChunkに対応するCitationとともに回答に含める
 6. IF 時系列分析に必要なメタデータまたは該当Chunkが存在しない場合、THEN THE Chatbot SHALL 根拠不足であることを明示し、推測で補完しない
 7. THE System SHALL 既存のフォルダスコープ・タグスコープ・検索モード指定と両立する形でメタデータ活用型検索を適用する
-8. THE API_Server SHALL 回答本文と参照情報を分離した構造化出力を返せるものとし、THE Web_UI SHALL その構造を用いて回答セクションと参照セクションを分けて描画する
+8. WHEN 時系列クエリが日記意図を伴う場合、THE Retriever SHALL diary-scoped Proposition Chunk と通常Chunkを統合し、日付メタデータを用いて再順位付けする
+9. THE System SHALL 検索精度向上を現時点の最優先目標とし、日付一致・ファイル名一致・日記スコープ・命題/本文の両立を検索品質向上の主要手段として扱う
 
-### 構造化出力仕様
+---
 
-#### API レスポンス形式
+### Requirement 13: 検索入力の決定論的解析
 
-```json
-{
-  "answer": "回答本文（引用を含む）",
-  "answer_blocks": [
-    {
-      "type": "summary|evidence|note",
-      "title": "ブロックタイトル",
-      "content": "ブロック内容",
-      "items": ["項目1", "項目2"]
-    }
-  ],
-  "citations": [
-    {
-      "text": "引用テキスト",
-      "source_path": "ファイルパス",
-      "title": "ファイルタイトル",
-      "chunk_index": 0
-    }
-  ]
-}
-```
+**User Story:** ユーザーとして、将来的にチャット入力欄で検索モードやスコープをテキストとして指定したい。そうすることで、UI操作に依存せず、検索条件を明示的かつ再現可能に指定できる。
 
-#### フロントエンド描画仕様
+#### Acceptance Criteria
 
-- **answer_blocks が存在する場合**: 構造化ブロックを個別に描画
-- **answer_blocks が空の場合**: 従来のプレーンテキスト表示
-- **ブロックタイプ別スタイリング**: summary（青）、evidence（緑）、note（黄）
-- **引用形式**: `[n]` の番号付き引用をハイパーリンク化
-
-#### LLM プロンプト要件
-
-- JSON のみを出力（余分なテキストなし）
-- 有効な JSON 構造を保証
-- HTML やマークダウンを含めない
-- 簡潔な内容を維持
-
-#### Obsidian URI連携
-
-- **Citationリンク**: `obsidian://open?file=filename` 形式でObsidianノートを直接開く
-- **ファイル名抽出**: パスからファイル名を自動抽出（拡張子除去）
-- **ブラウザ連携**: クリックでObsidianアプリケーションを起動
+1. THE System SHALL 生のユーザー入力を最初に解析し、検索モード・スコープ・自然文クエリ本文を分離する
+2. WHEN ユーザーが `/diary 最後にビールを飲んだのはいつ？ #飲み会` のような入力を送信したとき、THE System SHALL `search_mode=diary`、`tags=["飲み会"]`、`query="最後にビールを飲んだのはいつ？"` として解釈する
+3. THE System SHALL UIで指定された検索モード・スコープとテキストコマンドから抽出された条件を統合し、一貫したRetrieval planを生成する
+4. IF UI指定とテキストコマンド指定が競合する場合、THEN THE System SHALL 明示的なテキストコマンド指定を優先する
+5. THE Retrieval layer SHALL 推測に依存する前に、上流で確定した検索モード・スコープ・正規化済みクエリを受け取って実行する
 
 ---
 
 ## 将来の展望
 
-### Requirement 13: MCPセキュリティとレート制限
+### Requirement 14: MCPセキュリティとレート制限
 
 **User Story:** システム管理者として、AIエージェントによるMCP経由のリクエストが暴走したり不具合でエンドレスに続いたりするのを防ぎたい。そうすることで、システムの安定性とリソース保護を確保できる。
 

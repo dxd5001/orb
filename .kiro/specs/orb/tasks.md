@@ -195,28 +195,35 @@
     - `ChatRequest` に `search_mode` フィールドを追加し、デフォルト値を `auto` にする
     - _Requirements: 11.2, 11.6, 8.2_
 
-  - [ ] 11.2 `Retriever` に検索モード分岐を実装する
-    - `retrieve(query, scope, top_k, search_mode)` シグネチャに更新する
-    - `diary` モードでは日付正規化と日記ファイル名ベース検索を優先する
-    - `general` モードでは意味検索を優先し、日記ファイル名検索を強制しない
-    - `auto` モードではクエリ内容から日記検索優先か汎用検索優先かを自動判定する
-    - _Requirements: 11.3, 11.4, 11.5, 11.7_
+  - [ ] 11.2 `QueryParser` と `QueryPlanner` を追加する
+    - 生のユーザー入力から `/auto` / `/diary` / `/general` を抽出する
+    - `#tag` と `@folder` を解析して Scope に変換する
+    - UIで指定された `search_mode` / `scope` と統合して `ParsedQuery` を生成する
+    - `ParsedQuery` から `RetrievalPlan` を生成し、日付正規化と intent 判定を行う
+    - _Requirements: 6.6, 6.7, 11.3, 11.6, 13.1, 13.2, 13.3, 13.4, 13.5_
 
   - [ ] 11.3 `/api/chat` で検索モードを受け渡す
-    - `backend/routers/chat.py` で `search_mode` を受け取り、`Retriever` と `Generator` に反映する
+    - `backend/routers/chat.py` で `search_mode` と `scope` を受け取り、`QueryParser` / `QueryPlanner` / `Retriever` に反映する
     - 検索モード未指定時は `auto` を使用する
-    - _Requirements: 11.2, 11.6, 8.2_
+    - _Requirements: 11.2, 11.7, 13.3, 13.5, 8.2_
 
   - [ ] 11.4 Web UI に検索モード選択UIを追加する
     - `frontend/index.html` に `Auto` / `Diary` / `General` の選択コンポーネントを追加する
     - `/api/chat` への送信ペイロードに `search_mode` を含める
     - _Requirements: 11.1, 11.2, 7.2_
 
-  - [ ]\* 11.5 検索モードの例ベーステストを追加する
+  - [ ] 11.5 `Retriever` を plan 実行型に移行する
+    - `retrieve(plan)` を追加し、既存の `retrieve(query, scope, top_k, search_mode)` を互換レイヤとして残す
+    - `Auto` で diary/date intent を fact/context 判定より先に処理する
+    - `Diary` / `General` / `Auto` の各実行戦略を分離する
+    - _Requirements: 11.3, 11.4, 11.5, 11.6, 11.7, 13.5_
+
+  - [ ]\* 11.6 検索モードと入力解析の例ベーステストを追加する
     - `diary` モードで日付クエリがファイル名ベース検索優先になることを検証する
+    - `auto` モードで diary/date intent が上流で優先されることを検証する
+    - `/diary 最後にビールを飲んだのはいつ？ #飲み会` のパース結果を検証する
     - `general` モードで意味検索が継続して使われることを検証する
-    - `auto` モード未指定時に `auto` が使われることを検証する
-    - _Requirements: 11.3, 11.4, 11.5, 11.6, 11.7_
+    - _Requirements: 11.3, 11.4, 11.5, 11.6, 11.7, 13.1, 13.2, 13.3, 13.4, 13.5_
 
 - [ ] 12. メタデータ活用型ハイブリッド検索の実装
   - [ ] 12.1 メタデータ分析ヘルパー関数を実装する
@@ -255,6 +262,17 @@
     - 集中期間検出を検証
     - ハイブリッド検索シナリオの統合テストを追加
     - _Requirements: 検索の信頼性と正確性_
+
+  - [ ] 12.6 Diary モードへの Proposition Indexing 統合
+    - Diary scope 内で proposition collection と regular collection を両方検索する
+    - filename/date exact match を最優先し、該当ノートの命題と本文を関連付ける
+    - `source_path` 単位で note-centric に結果を集約し再順位付けする
+    - _Requirements: 11.4, 12.8, 12.9_
+
+  - [ ] 12.7 note-centric ranking を実装する
+    - `date exact match`、`filename/title match`、`diary path match`、`proposition + regular` を加点する
+    - proposition を入口、regular chunk を補足本文として扱える ranking を実装する
+    - _Requirements: 12.8, 12.9_
 
 ## 注意事項
 
