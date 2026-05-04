@@ -425,7 +425,7 @@ Please base your answer only on this context and return valid JSON.""",
 
     def _renumber_citations_in_text(self, text: str, citations: List[Citation]) -> str:
         """
-        LLMが出力した [chunk_xxxx] を正しい表示番号 [N] に変換する。
+        LLMが出力した [chunk_xxxx] または [filename::index] を正しい表示番号 [N] に変換する。
 
         Args:
             text: LLMが出力したテキスト
@@ -454,7 +454,21 @@ Please base your answer only on this context and return valid JSON.""",
                 # 見つからない場合はそのまま返す（または削除）
                 return f"[{chunk_id}]"
 
-        return re.sub(r"\[chunk_([^\]]+)\]", replace_chunk_id, text)
+        # Handle [chunk_xxxx] format
+        text = re.sub(r"\[chunk_([^\]]+)\]", replace_chunk_id, text)
+
+        # Handle [filename::index] format (e.g., [daily/2025-12-09.md::0])
+        def replace_filename_index(match: re.Match) -> str:
+            filename_index = match.group(1)
+            if filename_index in chunk_id_to_number:
+                return f"[{chunk_id_to_number[filename_index]}]"
+            else:
+                # 見つからない場合はそのまま返す（または削除）
+                return f"[{filename_index}]"
+
+        text = re.sub(r"\[([^\]]+::\d+)\]", replace_filename_index, text)
+
+        return text
 
     def _extract_chunk_id_from_citation(self, citation: Citation) -> Optional[str]:
         """
