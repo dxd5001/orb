@@ -9,6 +9,7 @@ import logging
 from typing import List, Dict, Any, Optional, TYPE_CHECKING
 import uuid
 import json
+import re
 from datetime import datetime
 
 try:
@@ -29,6 +30,18 @@ if TYPE_CHECKING:
     from llm.base import LLMBackend
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_date_from_diary_filename(file_path: str) -> Optional[datetime]:
+    """Extract date from diary filename (e.g., Diary/2025-10-18.md -> 2025-10-18)."""
+    # Match pattern like Diary/2025-10-18.md or Diary/2025-10-18
+    match = re.search(r"(\d{4}-\d{2}-\d{2})", file_path)
+    if match:
+        try:
+            return datetime.strptime(match.group(1), "%Y-%m-%d")
+        except ValueError:
+            pass
+    return None
 
 
 class Indexer:
@@ -153,6 +166,11 @@ class Indexer:
             prompt = f"""以下の日記テキストから、ユーザーが後から「いつ〇〇したか」と問いかけそうな
 短い命題を箇条書きで列挙してください。
 1命題1事実、体言止めまたは短文で記述してください。
+
+特に以下の情報も含めてください：
+- 食事内容（食べたもの、飲んだもの）
+- 「食べたもの」セクションのアイテム
+- 重要なイベントや出来事
 
 テキスト:
 {note_text}
