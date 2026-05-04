@@ -11,8 +11,26 @@ import json
 from datetime import datetime, date
 from typing import List, Optional, Dict, Any, TYPE_CHECKING
 
-from models import Chunk, ChatTurn, ChatResponse, Citation, AnswerBlock, ImprovementRule
-from llm.base import LLMBackend
+try:
+    from models import (
+        Chunk,
+        ChatTurn,
+        ChatResponse,
+        Citation,
+        AnswerBlock,
+        ImprovementRule,
+    )
+    from llm.base import LLMBackend
+except ImportError:
+    from backend.models import (
+        Chunk,
+        ChatTurn,
+        ChatResponse,
+        Citation,
+        AnswerBlock,
+        ImprovementRule,
+    )
+    from backend.llm.base import LLMBackend
 
 if TYPE_CHECKING:
     from feedback.retriever import RuleRetriever
@@ -303,12 +321,27 @@ Please base your answer only on this context and return valid JSON.""",
         # Add context chunks
         if chunks:
             prompt_parts.append("\n--- CONTEXT ---")
-            for i, chunk in enumerate(chunks, 1):
-                chunk_text = self._prepare_chunk_text(chunk.text)
+            proposition_chunks, regular_chunks = self._split_chunks_by_role(chunks)
+
+            if proposition_chunks:
                 prompt_parts.append(
-                    f"\nChunk {i} (ID: {chunk.chunk_id}):\n{chunk_text}\n"
+                    "Use proposition chunks as primary evidence for direct claims."
                 )
-                prompt_parts.append(f"Source: {chunk.source_path} - {chunk.title}")
+                prompt_parts.append("\n[EVIDENCE CHUNKS]")
+                self._append_chunk_section(
+                    prompt_parts, proposition_chunks, start_index=1
+                )
+
+            if regular_chunks:
+                prompt_parts.append(
+                    "Use regular chunks as supporting context, detail, and narrative background."
+                )
+                prompt_parts.append("\n[SUPPORTING CONTEXT CHUNKS]")
+                self._append_chunk_section(
+                    prompt_parts,
+                    regular_chunks,
+                    start_index=len(proposition_chunks) + 1,
+                )
 
         # Add conversation history
         if history:
@@ -325,6 +358,33 @@ Please base your answer only on this context and return valid JSON.""",
         prompt_parts.append("\nAssistant:")
 
         return "\n".join(prompt_parts)
+
+    def _split_chunks_by_role(
+        self, chunks: List[Chunk]
+    ) -> tuple[List[Chunk], List[Chunk]]:
+        """Split chunks into proposition evidence and regular supporting context."""
+        proposition_chunks = [chunk for chunk in chunks if chunk.is_proposition]
+        regular_chunks = [chunk for chunk in chunks if not chunk.is_proposition]
+        logger.info(
+            f"Chunk split: {len(proposition_chunks)} proposition, {len(regular_chunks)} regular"
+        )
+        for chunk in chunks[:3]:
+            logger.info(
+                f"Chunk {chunk.chunk_id}: is_proposition={chunk.is_proposition}, "
+                f"source_path={chunk.source_path}"
+            )
+        return proposition_chunks, regular_chunks
+
+    def _append_chunk_section(
+        self, prompt_parts: List[str], chunks: List[Chunk], start_index: int = 1
+    ) -> None:
+        """Append formatted chunk entries to the prompt."""
+        for offset, chunk in enumerate(chunks, start_index):
+            chunk_text = self._prepare_chunk_text(chunk.text)
+            prompt_parts.append(
+                f"\nChunk {offset} (ID: {chunk.chunk_id}):\n{chunk_text}\n"
+            )
+            prompt_parts.append(f"Source: {chunk.source_path} - {chunk.title}")
 
     def _estimate_tokens(self, text: str) -> int:
         """文字数ベースのトークン推定（1トークン ≈ 2文字）。"""
@@ -491,9 +551,12 @@ Please base your answer only on this context and return valid JSON.""",
             # Extract citations from answer text AND all answer_blocks content
             full_text_for_citations = answer
             for block in structured_output.get("answer_blocks", []):
-                full_text_for_citations += " " + block.get("content", "")
+                block_content = block.get("content") or ""
+                if block_content:
+                    full_text_for_citations += " " + block_content
                 for item in block.get("items", []):
-                    full_text_for_citations += " " + item
+                    if item:
+                        full_text_for_citations += " " + item
 
             citations = self._extract_structured_citations(
                 full_text_for_citations, chunks
@@ -506,10 +569,13 @@ Please base your answer only on this context and return valid JSON.""",
             if not citations:
                 seen = set()
                 citations = []
-                for c in chunks:
+                for c in self._prioritize_chunks_for_citation(chunks):
                     if c.source_path not in seen:
                         citations.append(self._create_citation_from_chunk(c))
                         seen.add(c.source_path)
+            answer_blocks = self._ensure_role_aware_answer_blocks(
+                answer_blocks, answer, chunks
+            )
             return answer, answer_blocks, citations
 
         # Try to extract structured citations first
@@ -529,9 +595,7 @@ Please base your answer only on this context and return valid JSON.""",
                     citations.append(self._create_citation_from_chunk(c))
                     seen.add(c.source_path)
 
-        answer_blocks = [
-            AnswerBlock(type="summary", title="回答", content=answer, items=[])
-        ]
+        answer_blocks = self._ensure_role_aware_answer_blocks([], answer, chunks)
         return answer, answer_blocks, citations
 
     def _parse_structured_output(self, llm_response: str) -> Optional[Dict[str, Any]]:
@@ -622,6 +686,66 @@ Please base your answer only on this context and return valid JSON.""",
 
         return answer_blocks
 
+    def _ensure_role_aware_answer_blocks(
+        self, answer_blocks: List[AnswerBlock], answer: str, chunks: List[Chunk]
+    ) -> List[AnswerBlock]:
+        """Ensure answer blocks include summary plus evidence/context blocks when available."""
+        logger.info(
+            f"_ensure_role_aware_answer_blocks called: {len(answer_blocks)} blocks, {len(chunks)} chunks"
+        )
+        blocks = list(answer_blocks) if answer_blocks else []
+        if not any(block.type == "summary" for block in blocks):
+            blocks.insert(
+                0, AnswerBlock(type="summary", title="回答", content=answer, items=[])
+            )
+
+        proposition_chunks, regular_chunks = self._split_chunks_by_role(chunks)
+
+        if proposition_chunks and not any(block.type == "evidence" for block in blocks):
+            evidence_items = [
+                self._summarize_chunk_for_block(chunk)
+                for chunk in proposition_chunks[:3]
+            ]
+            logger.info(f"Adding evidence block with {len(evidence_items)} items")
+            blocks.append(
+                AnswerBlock(
+                    type="evidence",
+                    title="根拠",
+                    content="主要な主張を直接支える根拠です。",
+                    items=evidence_items,
+                )
+            )
+
+        if regular_chunks and not any(block.type == "context" for block in blocks):
+            context_items = [
+                self._summarize_chunk_for_block(chunk) for chunk in regular_chunks[:3]
+            ]
+            logger.info(f"Adding context block with {len(context_items)} items")
+            blocks.append(
+                AnswerBlock(
+                    type="context",
+                    title="補足文脈",
+                    content="背景説明や詳細理解のための補足コンテキストです。",
+                    items=context_items,
+                )
+            )
+
+        return blocks
+
+    def _summarize_chunk_for_block(self, chunk: Chunk, max_length: int = 120) -> str:
+        """Create a compact bullet item for answer blocks from a chunk."""
+        text = self._prepare_chunk_text(chunk.text)
+        logger.info(
+            f"_summarize_chunk_for_block: chunk_id={chunk.chunk_id}, text_length={len(text)}, is_proposition={chunk.is_proposition}"
+        )
+        if len(text) > max_length:
+            text = text[:max_length].rstrip() + "..."
+        result = f"{text} [{chunk.chunk_id}]"
+        logger.info(
+            f"_summarize_chunk_for_block: result_length={len(result)}, result='{result[:50]}...'"
+        )
+        return result
+
     def _extract_structured_citations(
         self, response: str, chunks: List[Chunk]
     ) -> List[Citation]:
@@ -636,6 +760,7 @@ Please base your answer only on this context and return valid JSON.""",
             List of extracted citations
         """
         citations = []
+        prioritized_chunks = self._prioritize_chunks_for_citation(chunks)
 
         # Look for citation patterns - prioritize chunk ID pattern
         citation_patterns = [
@@ -643,6 +768,7 @@ Please base your answer only on this context and return valid JSON.""",
             r"\[(\d+)\]",  # [1], [2], etc. (fallback for old format)
             r"\[Source:\s*([^\]]+)\]",  # [Source: note.md]
             r"\[([^\]]+\.md)\]",  # [note.md]
+            r"\[([^\]]+)\]",  # [AI], [Project X], etc. (fallback label match)
         ]
 
         for pattern in citation_patterns:
@@ -651,15 +777,31 @@ Please base your answer only on this context and return valid JSON.""",
                 citation_ref = match.group(1)
 
                 # Try to map citation to chunk
-                citation = self._map_citation_to_chunk(citation_ref, chunks)
+                citation = self._map_citation_to_chunk(citation_ref, prioritized_chunks)
                 if citation and citation not in citations:
                     citations.append(citation)
 
         # If no structured citations found, try to infer from content
         if not citations:
-            citations = self._infer_citations_from_content(response, chunks)
+            citations = self._infer_citations_from_content(response, prioritized_chunks)
 
         return citations
+
+    def _prioritize_chunks_for_citation(self, chunks: List[Chunk]) -> List[Chunk]:
+        """Prioritize proposition chunks first for citation mapping and inference."""
+
+        def get_sort_key(chunk):
+            try:
+                index = (
+                    int(chunk.chunk_index)
+                    if isinstance(chunk.chunk_index, (int, str))
+                    else 0
+                )
+            except (ValueError, TypeError):
+                index = 0
+            return (not chunk.is_proposition, index)
+
+        return sorted(chunks, key=get_sort_key)
 
     def _map_citation_to_chunk(
         self, citation_ref: str, chunks: List[Chunk]
@@ -739,9 +881,10 @@ Please base your answer only on this context and return valid JSON.""",
             List of inferred citations
         """
         citations = []
+        prioritized_chunks = self._prioritize_chunks_for_citation(chunks)
 
         # Simple heuristic: if response contains content from a chunk, cite it
-        for chunk in chunks:
+        for chunk in prioritized_chunks:
             # Check if response contains significant content from chunk
             chunk_sentences = chunk.text.split(".")[:3]  # First 3 sentences
             for sentence in chunk_sentences:
@@ -791,6 +934,15 @@ Please base your answer only on this context and return valid JSON.""",
         """
         formatted_citations = []
         seen_source_paths = set()
+        chunk_by_chunk_id = {chunk.chunk_id: chunk for chunk in chunks}
+
+        citations = sorted(
+            citations,
+            key=lambda citation: (
+                not self._is_proposition_citation(citation, chunk_by_chunk_id),
+                citation.file_path,
+            ),
+        )
 
         for citation in citations:
             # Validate citation has required fields
@@ -807,6 +959,13 @@ Please base your answer only on this context and return valid JSON.""",
                 seen_source_paths.add(citation.source_path)
 
         return formatted_citations
+
+    def _is_proposition_citation(
+        self, citation: Citation, chunk_by_chunk_id: Dict[str, Chunk]
+    ) -> bool:
+        """Return whether a citation refers to a proposition chunk."""
+        chunk = chunk_by_chunk_id.get(citation.source_path)
+        return bool(chunk and chunk.is_proposition)
 
     def get_system_prompt(self, language: str = "en") -> str:
         """
