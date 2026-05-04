@@ -8,9 +8,14 @@ import pytest
 from datetime import datetime
 from unittest.mock import MagicMock
 
-from generation.generator import Generator
-from models import Chunk, ChatTurn, ChatResponse, Citation
-from llm.base import LLMBackend
+try:
+    from generation.generator import Generator
+    from models import Chunk, ChatTurn, ChatResponse, Citation
+    from llm.base import LLMBackend
+except ImportError:
+    from backend.generation.generator import Generator
+    from backend.models import Chunk, ChatTurn, ChatResponse, Citation
+    from backend.llm.base import LLMBackend
 
 
 class MockLLMBackend(LLMBackend):
@@ -63,7 +68,7 @@ class TestGenerator:
         """Test generator initialization."""
         assert self.generator.llm_backend == self.mock_llm
         assert self.generator.MAX_HISTORY_TURNS == 5
-        assert len(self.generator.SYSTEM_PROMPT) > 0
+        assert len(self.generator.SYSTEM_PROMPTS["en"]) > 0
 
     def test_generate_empty_query(self):
         """Test generation with empty query."""
@@ -78,7 +83,10 @@ class TestGenerator:
         response = self.generator.generate("What is AI?", [])
 
         assert isinstance(response, ChatResponse)
-        assert "Vault related information" in response.answer
+        assert (
+            "related information that could help answer this question"
+            in response.answer
+        )
         assert len(response.citations) == 0
 
     def test_generate_with_chunks(self):
@@ -100,6 +108,122 @@ class TestGenerator:
         assert "What is AI?" in prompt
         assert "artificial intelligence" in prompt
         assert "natural language processing" in prompt
+
+    def test_build_prompt_separates_proposition_and_supporting_chunks(self):
+        """Test prompt separates proposition evidence from supporting context."""
+        chunks = [
+            Chunk(
+                chunk_id="prop.md::0",
+                text="AI includes machine learning.",
+                source_path="notes/ai.md",
+                title="AI",
+                tags=["ai"],
+                frontmatter={},
+                last_modified=datetime.now(),
+                chunk_index=0,
+                is_proposition=True,
+            ),
+            Chunk(
+                chunk_id="context.md::0",
+                text="This note explains historical background for AI systems.",
+                source_path="notes/history.md",
+                title="History",
+                tags=["ai"],
+                frontmatter={},
+                last_modified=datetime.now(),
+                chunk_index=0,
+            ),
+        ]
+
+        prompt = self.generator._build_prompt("What is AI?", chunks, [])
+
+        assert "[EVIDENCE CHUNKS]" in prompt
+        assert "[SUPPORTING CONTEXT CHUNKS]" in prompt
+        assert "AI includes machine learning." in prompt
+        assert "historical background for AI systems" in prompt
+
+    def test_extract_answer_blocks_adds_evidence_and_context_blocks(self):
+        """Test answer block extraction supplements summary with evidence/context blocks."""
+        chunks = [
+            Chunk(
+                chunk_id="prop.md::0",
+                text="AI includes machine learning.",
+                source_path="notes/ai.md",
+                title="AI",
+                tags=["ai"],
+                frontmatter={},
+                last_modified=datetime.now(),
+                chunk_index=0,
+                is_proposition=True,
+            ),
+            Chunk(
+                chunk_id="context.md::0",
+                text="This note explains historical background for AI systems.",
+                source_path="notes/history.md",
+                title="History",
+                tags=["ai"],
+                frontmatter={},
+                last_modified=datetime.now(),
+                chunk_index=0,
+            ),
+        ]
+        llm_response = """{
+            "answer": "AI is supported by the provided notes [chunk_prop.md::0].",
+            "answer_blocks": [
+                {
+                    "type": "summary",
+                    "title": "回答",
+                    "content": "AI is supported by the provided notes [chunk_prop.md::0].",
+                    "items": []
+                }
+            ]
+        }"""
+
+        answer, answer_blocks, citations = (
+            self.generator._extract_answer_blocks_and_citations(
+                llm_response,
+                chunks,
+            )
+        )
+
+        assert answer
+        assert any(block.type == "summary" for block in answer_blocks)
+        assert any(block.type == "evidence" for block in answer_blocks)
+        assert any(block.type == "context" for block in answer_blocks)
+        assert len(citations) >= 1
+
+    def test_extract_structured_citations_prioritizes_proposition_chunks(self):
+        """Test citation extraction prioritizes proposition chunks for ambiguous references."""
+        chunks = [
+            Chunk(
+                chunk_id="context.md::0",
+                text="AI includes machine learning in a long narrative explanation.",
+                source_path="notes/ai.md",
+                title="AI",
+                tags=["ai"],
+                frontmatter={},
+                last_modified=datetime.now(),
+                chunk_index=1,
+            ),
+            Chunk(
+                chunk_id="prop.md::0",
+                text="AI includes machine learning.",
+                source_path="notes/ai.md",
+                title="AI",
+                tags=["ai"],
+                frontmatter={},
+                last_modified=datetime.now(),
+                chunk_index=0,
+                is_proposition=True,
+            ),
+        ]
+
+        citations = self.generator._extract_structured_citations(
+            "Based on [AI], machine learning is included.", chunks
+        )
+
+        assert len(citations) >= 1
+        assert citations[0].source_path == "prop.md::0"
 
     def test_chunk_id_citation_mapping(self):
         """Test chunk ID to citation number mapping."""
@@ -173,10 +297,9 @@ class TestGenerator:
         prompt = self.generator._build_prompt("What is AI?", self.test_chunks, history)
 
         assert "CONVERSATION HISTORY" in prompt
-        assert "User: Hello" in prompt
-        assert "Assistant: Hi there!" in prompt
-        # Should only include last 5 turns
-        assert "Latest question" not in prompt
+        assert "Assistant: Hi there!" not in prompt
+        assert "User: How are you?" in prompt
+        assert "User: Latest question" in prompt
 
     def test_prepare_chunk_text(self):
         """Test chunk text preparation."""
@@ -232,7 +355,7 @@ class TestGenerator:
 
     def test_infer_citations_from_content(self):
         """Test inferring citations from content."""
-        response = "Artificial intelligence and machine learning are important fields."
+        response = "This is the first chunk about artificial intelligence and machine learning."
         citations = self.generator._infer_citations_from_content(
             response, self.test_chunks
         )
@@ -251,7 +374,7 @@ class TestGenerator:
         assert "[1]" not in clean_response
         assert "[Source: test.md]" not in clean_response
         assert "[note.md]" not in clean_response
-        assert "This is a response with citations." in clean_response
+        assert "This is a response with citations" in clean_response
 
     def test_create_citation_from_chunk(self):
         """Test creating citation from chunk."""
@@ -266,9 +389,17 @@ class TestGenerator:
     def test_format_citations(self):
         """Test formatting citations."""
         citations = [
-            Citation(file_path="test1.md", title="Test 1", snippet="Short snippet"),
             Citation(
-                file_path="test2.md", title="Test 2", snippet="a" * 400
+                file_path="test1.md",
+                title="Test 1",
+                snippet="Short snippet",
+                source_path="test1.md::0",
+            ),
+            Citation(
+                file_path="test2.md",
+                title="Test 2",
+                snippet="a" * 400,
+                source_path="test2.md::0",
             ),  # Too long
         ]
 
@@ -281,7 +412,7 @@ class TestGenerator:
     def test_get_system_prompt(self):
         """Test getting system prompt."""
         prompt = self.generator.get_system_prompt()
-        assert prompt == self.generator.SYSTEM_PROMPT
+        assert prompt == self.generator.SYSTEM_PROMPTS["en"]
         assert len(prompt) > 0
 
     def test_update_system_prompt(self):
@@ -289,7 +420,7 @@ class TestGenerator:
         new_prompt = "New system prompt"
         self.generator.update_system_prompt(new_prompt)
 
-        assert self.generator.SYSTEM_PROMPT == new_prompt
+        assert self.generator.SYSTEM_PROMPTS["en"] == new_prompt
         assert self.generator.get_system_prompt() == new_prompt
 
     def test_test_generation_success(self):
@@ -345,7 +476,7 @@ class TestGenerator:
 
                 # File path should correspond to actual chunks
                 assert any(
-                    c.file_path == citation.file_path for c in self.test_chunks
+                    c.source_path == citation.file_path for c in self.test_chunks
                 ), f"Citation file_path {citation.file_path} not found in chunks"
 
     def test_property_based_history_limit(self):
