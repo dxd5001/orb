@@ -155,7 +155,7 @@ function App() {
   const handleIndexVault = async () => {
     setIsLoading(true);
     try {
-      await http.post("/api/index");
+      await http.post("/api/index", null, null); // No timeout
       await loadStatus();
       const successMessage = {
         role: "assistant",

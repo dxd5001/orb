@@ -2,7 +2,10 @@
 const http = {
     async post(url, data, timeout = 1800000) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        let timeoutId;
+        if (timeout !== null) {
+            timeoutId = setTimeout(() => controller.abort(), timeout);
+        }
         
         try {
             const response = await fetch(`http://localhost:8000${url}`, {
@@ -14,7 +17,9 @@ const http = {
                 signal: controller.signal
             });
             
-            clearTimeout(timeoutId);
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -22,21 +27,28 @@ const http = {
             
             return await response.json();
         } catch (error) {
-            clearTimeout(timeoutId);
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
             throw error;
         }
     },
     
     async get(url, timeout = 1800000) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        let timeoutId;
+        if (timeout !== null) {
+            timeoutId = setTimeout(() => controller.abort(), timeout);
+        }
         
         try {
             const response = await fetch(`http://localhost:8000${url}`, {
                 signal: controller.signal
             });
             
-            clearTimeout(timeoutId);
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -44,14 +56,19 @@ const http = {
             
             return await response.json();
         } catch (error) {
-            clearTimeout(timeoutId);
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
             throw error;
         }
     },
     
     async put(url, data, timeout = 1800000) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        let timeoutId;
+        if (timeout !== null) {
+            timeoutId = setTimeout(() => controller.abort(), timeout);
+        }
         
         try {
             const response = await fetch(`http://localhost:8000${url}`, {
@@ -63,7 +80,9 @@ const http = {
                 signal: controller.signal
             });
             
-            clearTimeout(timeoutId);
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -71,7 +90,9 @@ const http = {
             
             return await response.json();
         } catch (error) {
-            clearTimeout(timeoutId);
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
             throw error;
         }
     }
