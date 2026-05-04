@@ -720,29 +720,33 @@ Please base your answer only on this context and return valid JSON.""",
                 self._summarize_chunk_for_block(chunk)
                 for chunk in proposition_chunks[:3]
             ]
-            logger.info(f"Adding evidence block with {len(evidence_items)} items")
-            blocks.append(
-                AnswerBlock(
-                    type="evidence",
-                    title="根拠",
-                    content="主要な主張を直接支える根拠です。",
-                    items=evidence_items,
+            # Only add evidence block if there are items
+            if evidence_items:
+                logger.info(f"Adding evidence block with {len(evidence_items)} items")
+                blocks.append(
+                    AnswerBlock(
+                        type="evidence",
+                        title="根拠",
+                        content="主要な主張を直接支える根拠です。",
+                        items=evidence_items,
+                    )
                 )
-            )
 
         if regular_chunks and not any(block.type == "context" for block in blocks):
             context_items = [
                 self._summarize_chunk_for_block(chunk) for chunk in regular_chunks[:3]
             ]
-            logger.info(f"Adding context block with {len(context_items)} items")
-            blocks.append(
-                AnswerBlock(
-                    type="context",
-                    title="補足文脈",
-                    content="背景説明や詳細理解のための補足コンテキストです。",
-                    items=context_items,
+            # Only add context block if there are items
+            if context_items:
+                logger.info(f"Adding context block with {len(context_items)} items")
+                blocks.append(
+                    AnswerBlock(
+                        type="context",
+                        title="補足文脈",
+                        content="背景説明や詳細理解のための補足コンテキストです。",
+                        items=context_items,
+                    )
                 )
-            )
 
         return blocks
 
