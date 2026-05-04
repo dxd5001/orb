@@ -20,19 +20,24 @@ async def index_vault(request: Request) -> IndexResponse:
         config_manager = request.app.state.config_manager
 
         logger.info("Starting vault indexing...")
-        vault_path = config_manager.get_config('VAULT_PATH')
+        vault_path = config_manager.get_config("VAULT_PATH")
 
         ingest_result = ingestor.ingest(vault_path)
         if ingest_result.errors:
-            logger.warning(f"Ingestion completed with {len(ingest_result.errors)} errors")
+            logger.warning(
+                f"Ingestion completed with {len(ingest_result.errors)} errors"
+            )
 
-        index_result = indexer.index(ingest_result)
-        logger.info(f"Indexing completed: {index_result.note_count} notes, {index_result.chunk_count} chunks")
+        index_result = indexer.index_parallel(ingest_result)
+        logger.info(
+            f"Indexing completed: {index_result.note_count} notes, {index_result.chunk_count} chunks, {index_result.proposition_count} propositions"
+        )
 
         return IndexResponse(
             status="completed",
             notes=index_result.note_count,
-            chunks=index_result.chunk_count
+            chunks=index_result.chunk_count,
+            propositions=index_result.proposition_count,
         )
 
     except Exception as e:

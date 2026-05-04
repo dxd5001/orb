@@ -107,6 +107,22 @@ class SearchMode(str, Enum):
     GENERAL = "general"
 
 
+class QueryIntent(str, Enum):
+    """
+    Query intent classification for retrieval planning.
+
+    Determines how retrieval should prioritize diary, temporal,
+    proposition, or contextual search strategies.
+    """
+
+    FACT = "fact"
+    CONTEXT = "context"
+    TEMPORAL = "temporal"
+    DIARY = "diary"
+    GENERAL = "general"
+    UNKNOWN = "unknown"
+
+
 class ChatTurn(BaseModel):
     """
     Represents a single turn in a conversation history.
@@ -132,6 +148,55 @@ class ChatRequest(BaseModel):
     )
     search_mode: SearchMode = Field(
         SearchMode.AUTO, description="Search mode (default: auto)"
+    )
+
+
+class ParsedQuery(BaseModel):
+    """
+    Parsed search input after deterministic command extraction.
+
+    Separates raw input into normalized query text and explicit search controls.
+    """
+
+    raw_query: str = Field(..., description="Original user input before parsing")
+    query_text: str = Field(..., description="Query text after removing commands")
+    search_mode: SearchMode = Field(..., description="Resolved search mode")
+    scope: Optional[Scope] = Field(None, description="Resolved search scope")
+    command_search_mode: Optional[SearchMode] = Field(
+        None, description="Search mode extracted from inline command"
+    )
+    command_scope: Optional[Scope] = Field(
+        None, description="Scope extracted from inline command"
+    )
+
+
+class RetrievalPlan(BaseModel):
+    """
+    Executable retrieval plan produced by QueryPlanner.
+
+    Carries normalized query, final search mode, classified intent,
+    and booleans used by the retriever to route execution.
+    """
+
+    original_query: str = Field(..., description="Original user-facing query text")
+    normalized_query: str = Field(..., description="Date-normalized query text")
+    search_mode: SearchMode = Field(..., description="Final search mode")
+    scope: Optional[Scope] = Field(None, description="Resolved scope")
+    top_k: int = Field(5, description="Maximum number of chunks to return")
+    primary_intent: QueryIntent = Field(
+        QueryIntent.UNKNOWN, description="Primary classified intent"
+    )
+    is_diary_intent: bool = Field(
+        False, description="Whether diary strategy is preferred"
+    )
+    is_temporal: bool = Field(
+        False, description="Whether temporal reasoning is required"
+    )
+    is_fact_query: bool = Field(
+        False, description="Whether proposition-first search is useful"
+    )
+    is_context_query: bool = Field(
+        False, description="Whether regular chunk search is useful"
     )
 
 
@@ -208,7 +273,10 @@ class IndexResponse(BaseModel):
         ..., description="Processing status (e.g., 'completed', 'error')"
     )
     notes: Optional[int] = Field(None, description="Number of processed notes")
-    chunks: Optional[int] = Field(None, description="Number of created chunks")
+    chunks: Optional[int] = Field(None, description="Number of chunks created")
+    propositions: Optional[int] = Field(
+        None, description="Number of propositions created"
+    )
     error: Optional[str] = Field(None, description="Error message if processing failed")
 
 
