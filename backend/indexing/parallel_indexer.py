@@ -2,6 +2,7 @@
 Parallel Proposition Indexer for improved performance
 """
 
+import signal
 import concurrent.futures
 from typing import List, Tuple
 import logging
@@ -32,10 +33,17 @@ class ParallelIndexer(Indexer):
         embedding_backend,
         vector_store_path: str,
         llm_backend,
-        max_workers: int = 4,
+        max_workers: int = None,
     ):
         super().__init__(embedding_backend, vector_store_path, llm_backend)
-        self.max_workers = max_workers
+        # Default to 4 workers based on benchmark results (4 workers = 6x speed, 8 workers = 5x speed)
+        self.max_workers = max_workers if max_workers is not None else 4
+        self._shutdown_requested = False
+
+    def _handle_signal(self, signum, frame):
+        """Handle shutdown signal"""
+        logger.info(f"Received signal {signum}, requesting shutdown...")
+        self._shutdown_requested = True
 
     def _generate_propositions_batch(
         self, notes_batch: List[Tuple[int, NoteDocument]]
@@ -98,105 +106,124 @@ class ParallelIndexer(Indexer):
         """
         # IndexResult already imported at top
 
-        logger.info(
-            f"Starting parallel indexing of {len(ingest_result.notes)} notes with {self.max_workers} workers"
-        )
+        # Register signal handler
+        original_sigint_handler = signal.signal(signal.SIGINT, self._handle_signal)
+        original_sigterm_handler = signal.signal(signal.SIGTERM, self._handle_signal)
 
-        # Clear existing collections
-        self._clear_collections()
-
-        # Process notes in batches to manage memory
-        all_chunks = []
-        all_proposition_chunks = []
-        processed_notes = 0
-        failed_notes = 0
-
-        for i in range(0, len(ingest_result.notes), batch_size):
-            batch = ingest_result.notes[i : i + batch_size]
-            batch_with_indices = [(i + j, note) for j, note in enumerate(batch)]
-
+        try:
             logger.info(
-                f"Processing batch {i // batch_size + 1}/{(len(ingest_result.notes) + batch_size - 1) // batch_size}"
+                f"Starting parallel indexing of {len(ingest_result.notes)} notes with {self.max_workers} workers"
             )
 
-            # Generate propositions in parallel
-            batch_results = self._generate_propositions_batch(batch_with_indices)
+            # Clear existing collections
+            self._clear_collections()
 
-            # Process results
-            for result in batch_results:
-                if result.error:
-                    failed_notes += 1
-                    logger.warning(
-                        f"Failed to process note {result.note.file_path}: {result.error}"
-                    )
-                    continue
+            # Process notes in batches to manage memory
+            all_chunks = []
+            all_proposition_chunks = []
+            processed_notes = 0
+            failed_notes = 0
 
-                # Create regular chunks for this note
-                regular_chunks = self._create_chunks(result.note)
-                all_chunks.extend(regular_chunks)
+            for i in range(0, len(ingest_result.notes), batch_size):
+                # Check for shutdown request
+                if self._shutdown_requested:
+                    logger.info("Shutdown requested, stopping indexing...")
+                    break
 
-                # Add proposition chunks
-                all_proposition_chunks.extend(result.proposition_chunks)
+                batch = ingest_result.notes[i : i + batch_size]
+                batch_with_indices = [(i + j, note) for j, note in enumerate(batch)]
 
-                processed_notes += 1
+                logger.info(
+                    f"Processing batch {i // batch_size + 1}/{(len(ingest_result.notes) + batch_size - 1) // batch_size}"
+                )
+
+                # Generate propositions in parallel
+                batch_results = self._generate_propositions_batch(batch_with_indices)
+
+                # Process results
+                for result in batch_results:
+                    if result.error:
+                        failed_notes += 1
+                        logger.warning(
+                            f"Failed to process note {result.note.file_path}: {result.error}"
+                        )
+                        continue
+
+                    # Create regular chunks for this note
+                    regular_chunks = self._create_chunks(result.note)
+                    all_chunks.extend(regular_chunks)
+
+                    # Add proposition chunks
+                    all_proposition_chunks.extend(result.proposition_chunks)
+
+                    processed_notes += 1
+
+                logger.info(
+                    f"Batch completed: {processed_notes} notes processed, {failed_notes} failed"
+                )
+
+            # Generate embeddings for all chunks first
+            all_chunks_combined = all_chunks + all_proposition_chunks
+            all_texts = [chunk.text for chunk in all_chunks_combined]
+
+            # Filter out empty texts and corresponding chunks
+            valid_chunks = []
+            valid_texts = []
+            for chunk, text in zip(all_chunks_combined, all_texts):
+                if text and text.strip():  # Only include non-empty texts
+                    valid_chunks.append(chunk)
+                    valid_texts.append(text)
+                else:
+                    logger.warning(f"Skipping empty chunk from {chunk.source_path}")
+
+            embeddings = self.embedding_backend.embed(valid_texts)
 
             logger.info(
-                f"Batch completed: {processed_notes} notes processed, {failed_notes} failed"
+                f"Generated {len(embeddings)} embeddings of dimension {len(embeddings[0]) if embeddings else 0}"
             )
 
-        # Generate embeddings for all chunks first
-        all_chunks_combined = all_chunks + all_proposition_chunks
-        all_texts = [chunk.text for chunk in all_chunks_combined]
+            # Split valid chunks and embeddings by type
+            valid_regular_chunks = [
+                chunk for chunk in valid_chunks if not chunk.is_proposition
+            ]
+            valid_proposition_chunks = [
+                chunk for chunk in valid_chunks if chunk.is_proposition
+            ]
 
-        # Filter out empty texts and corresponding chunks
-        valid_chunks = []
-        valid_texts = []
-        for chunk, text in zip(all_chunks_combined, all_texts):
-            if text and text.strip():  # Only include non-empty texts
-                valid_chunks.append(chunk)
-                valid_texts.append(text)
-            else:
-                logger.warning(f"Skipping empty chunk from {chunk.source_path}")
+            # Split embeddings accordingly
+            regular_count = len(valid_regular_chunks)
+            regular_embeddings = embeddings[:regular_count]
+            proposition_embeddings = embeddings[regular_count:]
 
-        embeddings = self.embedding_backend.embed(valid_texts)
+            # Store all chunks in vector database
+            logger.info(f"Storing {len(valid_regular_chunks)} regular chunks...")
+            self._store_chunks(valid_regular_chunks, regular_embeddings)
 
-        logger.info(
-            f"Generated {len(embeddings)} embeddings of dimension {len(embeddings[0]) if embeddings else 0}"
-        )
+            logger.info(
+                f"Storing {len(valid_proposition_chunks)} proposition chunks..."
+            )
+            self._store_proposition_chunks(
+                valid_proposition_chunks, proposition_embeddings
+            )
 
-        # Split valid chunks and embeddings by type
-        valid_regular_chunks = [
-            chunk for chunk in valid_chunks if not chunk.is_proposition
-        ]
-        valid_proposition_chunks = [
-            chunk for chunk in valid_chunks if chunk.is_proposition
-        ]
+            # Create result
+            index_result = IndexResult(
+                note_count=processed_notes,
+                chunk_count=len(all_chunks),
+                proposition_count=len(all_proposition_chunks),
+            )
 
-        # Split embeddings accordingly
-        regular_count = len(valid_regular_chunks)
-        regular_embeddings = embeddings[:regular_count]
-        proposition_embeddings = embeddings[regular_count:]
+            logger.info(
+                f"Parallel indexing completed: {index_result.note_count} notes, "
+                f"{index_result.chunk_count} chunks, {index_result.proposition_count} propositions"
+            )
 
-        # Store all chunks in vector database
-        logger.info(f"Storing {len(valid_regular_chunks)} regular chunks...")
-        self._store_chunks(valid_regular_chunks, regular_embeddings)
+            return index_result
 
-        logger.info(f"Storing {len(valid_proposition_chunks)} proposition chunks...")
-        self._store_proposition_chunks(valid_proposition_chunks, proposition_embeddings)
-
-        # Create result
-        index_result = IndexResult(
-            note_count=processed_notes,
-            chunk_count=len(all_chunks),
-            proposition_count=len(all_proposition_chunks),
-        )
-
-        logger.info(
-            f"Parallel indexing completed: {index_result.note_count} notes, "
-            f"{index_result.chunk_count} chunks, {index_result.proposition_count} propositions"
-        )
-
-        return index_result
+        finally:
+            # Restore original signal handlers
+            signal.signal(signal.SIGINT, original_sigint_handler)
+            signal.signal(signal.SIGTERM, original_sigterm_handler)
 
     def _clear_collections(self):
         """Clear existing collections for idempotent indexing"""

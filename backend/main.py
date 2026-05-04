@@ -30,8 +30,11 @@ from feedback.store import FeedbackStore
 from feedback.retriever import RuleRetriever
 
 # Configure logging
+log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format=log_format,
+    handlers=[logging.FileHandler("orb.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -118,7 +121,6 @@ async def lifespan(app: FastAPI):
             app.state.embedding_backend,
             vector_store_path,
             llm_backend=app.state.llm_backend,
-            max_workers=4,  # Optimal number of workers for MacBook Pro
         )
 
         # Initialize retriever (with LLM backend for HyDE query expansion)
@@ -184,12 +186,14 @@ def create_app() -> FastAPI:
     from routers.status import router as status_router
     from routers.config import router as config_router
     from routers.feedback import router as feedback_router
+    from routers.debug import router as debug_router
 
     app.include_router(chat_router, prefix="/api", tags=["chat"])
     app.include_router(index_router, prefix="/api", tags=["index"])
     app.include_router(status_router, prefix="/api", tags=["status"])
     app.include_router(config_router, prefix="/api", tags=["config"])
     app.include_router(feedback_router, prefix="/api", tags=["feedback"])
+    app.include_router(debug_router)
 
     # Mount static files for frontend
     frontend_path = Path(__file__).parent.parent / "frontend"
