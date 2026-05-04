@@ -25,29 +25,28 @@ import logging
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 
 class OrbMenuBarApp:
     """Main Orb menu bar application class."""
-    
+
     def __init__(self):
         """Initialize the menu bar application."""
         self.web_server_process: Optional[subprocess.Popen] = None
         self.mcp_server_process: Optional[subprocess.Popen] = None
         self.app_dir = Path(__file__).parent
         self.backend_dir = self.app_dir / "backend"
-        
+
         # Status tracking
         self.web_server_running = False
         self.mcp_server_running = False
-        
+
         # Create menu bar icon
         self.icon = self.create_icon()
-        
+
     def create_icon(self) -> Image.Image:
         """Create the menu bar icon from the logo image."""
         logo_path = self.app_dir / "docs" / "assets" / "orb-logo-menuicon-8.png"
@@ -59,54 +58,54 @@ class OrbMenuBarApp:
                 img = img.resize((22, 22), Image.LANCZOS)
                 return img
             except Exception as e:
-                logger.warning(f"Failed to load logo image: {e}, falling back to default icon")
+                logger.warning(
+                    f"Failed to load logo image: {e}, falling back to default icon"
+                )
 
         # Fallback: simple blue square with "Orb" text
-        image = Image.new('RGBA', (22, 22), color=(0, 122, 255, 255))
+        image = Image.new("RGBA", (22, 22), color=(0, 122, 255, 255))
         draw = ImageDraw.Draw(image)
-        draw.text((2, 5), "O", fill='white')
+        draw.text((2, 5), "O", fill="white")
         return image
-    
+
     def start_web_server(self, icon=None, item=None):
         """Start the web UI server."""
         if self.web_server_running:
             logger.info("Web server is already running")
             return
-            
+
         try:
             logger.info("Starting web server...")
-            
+
             # Check if backend directory exists
             if not self.backend_dir.exists():
                 logger.error(f"Backend directory not found: {self.backend_dir}")
                 return
-            
+
             # Start the web server in a new process group so we can kill it cleanly
             cmd = [sys.executable, "main.py"]
             self.web_server_process = subprocess.Popen(
                 cmd,
                 cwd=self.backend_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                start_new_session=True  # creates a new process group
+                start_new_session=True,  # creates a new process group
             )
-            
+
             self.web_server_running = True
             logger.info("Web server started successfully")
-            
+
             # Open browser after server is ready
             threading.Timer(3.0, self.open_web_ui).start()
-            
+
         except Exception as e:
             logger.error(f"Failed to start web server: {e}")
-    
+
     def _kill_port(self, port: int):
         """Kill any process listening on the given port as a fallback."""
         try:
             result = subprocess.run(
                 ["lsof", "-ti", f":{port}", "-sTCP:LISTEN"],
-                capture_output=True, text=True
+                capture_output=True,
+                text=True,
             )
             pids = result.stdout.strip().split()
             for pid in pids:
@@ -122,7 +121,7 @@ class OrbMenuBarApp:
         """Stop the web UI server."""
         if not self.web_server_running:
             return
-            
+
         try:
             if self.web_server_process:
                 # Kill the entire process group to ensure uvicorn and all children are stopped
@@ -132,30 +131,30 @@ class OrbMenuBarApp:
                     pass  # Already dead
                 self.web_server_process.wait(timeout=5)
                 self.web_server_process = None
-            
+
             self.web_server_running = False
             logger.info("Web server stopped")
             # Fallback: ensure nothing is left on port 8000
             self._kill_port(8000)
-            
+
         except Exception as e:
             logger.error(f"Failed to stop web server: {e}")
-    
+
     def start_mcp_server(self, icon=None, item=None):
         """Start the MCP server."""
         if self.mcp_server_running:
             logger.info("MCP server is already running")
             return
-            
+
         try:
             logger.info("Starting MCP server...")
-            
+
             # Check if MCP server script exists
             mcp_script = self.backend_dir / "mcp_server.py"
             if not mcp_script.exists():
                 logger.warning(f"MCP server script not found: {mcp_script}")
                 return
-            
+
             # Start the MCP server in a new process group
             cmd = [sys.executable, "mcp_server.py"]
             self.mcp_server_process = subprocess.Popen(
@@ -164,20 +163,20 @@ class OrbMenuBarApp:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                start_new_session=True  # creates a new process group
+                start_new_session=True,  # creates a new process group
             )
-            
+
             self.mcp_server_running = True
             logger.info("MCP server started successfully")
-            
+
         except Exception as e:
             logger.error(f"Failed to start MCP server: {e}")
-    
+
     def stop_mcp_server(self, icon=None, item=None):
         """Stop the MCP server."""
         if not self.mcp_server_running:
             return
-            
+
         try:
             if self.mcp_server_process:
                 try:
@@ -186,13 +185,13 @@ class OrbMenuBarApp:
                     pass
                 self.mcp_server_process.wait(timeout=5)
                 self.mcp_server_process = None
-            
+
             self.mcp_server_running = False
             logger.info("MCP server stopped")
-            
+
         except Exception as e:
             logger.error(f"Failed to stop MCP server: {e}")
-    
+
     def open_web_ui(self):
         """Open the web UI in the default browser."""
         try:
@@ -200,30 +199,30 @@ class OrbMenuBarApp:
             logger.info("Opened web UI in browser")
         except Exception as e:
             logger.error(f"Failed to open web UI: {e}")
-    
+
     def show_status(self, icon=None, item=None):
         """Show current status."""
         web_status = "Running" if self.web_server_running else "Stopped"
         mcp_status = "Running" if self.mcp_server_running else "Stopped"
-        
+
         status_msg = f"Web Server: {web_status}\nMCP Server: {mcp_status}"
         logger.info(f"Status: {status_msg}")
-        
+
         # In a real implementation, you might show a notification
         # For now, just log it
         print(f"Status: {status_msg}")
-    
+
     def quit_app(self, icon=None, item=None):
         """Quit the application."""
         logger.info("Quitting application...")
-        
+
         # Stop all servers
         self.stop_web_server()
         self.stop_mcp_server()
-        
+
         # Stop the menu bar app
         icon.stop()
-    
+
     def get_menu_items(self):
         """Get the menu items for the tray icon."""
         menu_items = [
@@ -233,19 +232,19 @@ class OrbMenuBarApp:
                     pystray.MenuItem(
                         "Start Web Server",
                         self.start_web_server,
-                        enabled=lambda item: not self.web_server_running
+                        enabled=lambda item: not self.web_server_running,
                     ),
                     pystray.MenuItem(
                         "Stop Web Server",
                         self.stop_web_server,
-                        enabled=lambda item: self.web_server_running
+                        enabled=lambda item: self.web_server_running,
                     ),
                     pystray.MenuItem(
                         "Open Web UI",
                         self.open_web_ui,
-                        enabled=lambda item: self.web_server_running
-                    )
-                )
+                        enabled=lambda item: self.web_server_running,
+                    ),
+                ),
             ),
             pystray.MenuItem(
                 "MCP Server",
@@ -253,40 +252,34 @@ class OrbMenuBarApp:
                     pystray.MenuItem(
                         "Start MCP Server",
                         self.start_mcp_server,
-                        enabled=lambda item: not self.mcp_server_running
+                        enabled=lambda item: not self.mcp_server_running,
                     ),
                     pystray.MenuItem(
                         "Stop MCP Server",
                         self.stop_mcp_server,
-                        enabled=lambda item: self.mcp_server_running
-                    )
-                )
+                        enabled=lambda item: self.mcp_server_running,
+                    ),
+                ),
             ),
-            pystray.MenuItem(
-                "Status",
-                self.show_status
-            ),
+            pystray.MenuItem("Status", self.show_status),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem(
-                "Quit",
-                self.quit_app
-            )
+            pystray.MenuItem("Quit", self.quit_app),
         ]
 
         return pystray.Menu(*menu_items)
-    
+
     def run(self):
         """Run the menu bar application."""
         logger.info("Starting Orb - RAG Chatbot for Obsidian Vaults menu bar app...")
-        
+
         # Create and run the tray icon
         icon = pystray.Icon(
             "orb",
             self.icon,
             "Orb - RAG Chatbot for Obsidian Vaults",
-            self.get_menu_items()
+            self.get_menu_items(),
         )
-        
+
         try:
             icon.run()
         except KeyboardInterrupt:
