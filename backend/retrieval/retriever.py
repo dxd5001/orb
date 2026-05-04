@@ -137,6 +137,7 @@ class Retriever:
         scope: Optional[Scope] = None,
         top_k: int = 5,
         search_mode: SearchMode = SearchMode.AUTO,
+        plan: Optional[Dict[str, Any]] = None,
     ) -> List[Chunk]:
         """
         Retrieve relevant chunks based on query similarity and search mode.
@@ -165,13 +166,21 @@ class Retriever:
             # Query type detection for proposition vs regular search
             is_fact_query = self._is_fact_query(query)
             is_context_query = self._is_context_query(query)
+            is_temporal_query = self._is_temporal_query(query)
 
             logger.info(
-                f"Query analysis: is_fact_query={is_fact_query}, is_context_query={is_context_query}"
+                f"Query analysis: is_fact_query={is_fact_query}, is_context_query={is_context_query}, is_temporal_query={is_temporal_query}"
             )
 
             # Route to appropriate search strategy based on query type
-            if is_fact_query and self.proposition_collection is not None:
+            # Prioritize temporal queries over fact queries
+            if is_temporal_query and search_mode == SearchMode.AUTO:
+                logger.info("Using TEMPORAL query mode - temporal query detected")
+                normalized_query = self._normalize_date_query(query)
+                return self._retrieve_temporal_query(
+                    query, normalized_query, scope, top_k, prefer_diary=True
+                )
+            elif is_fact_query and self.proposition_collection is not None:
                 logger.info("Using PROPOSITION mode - fact-based query detected")
                 return self._retrieve_propositions(query, scope, top_k)
             elif is_context_query and search_mode == SearchMode.AUTO:
@@ -647,15 +656,75 @@ class Retriever:
             f"Temporal query detected: query='{query}', keyword='{keyword}', ascending={ascending}, prefer_diary={prefer_diary}"
         )
 
-        query_embedding = self.embedding_backend.embed([temporal_query])[0]
-        where_filter = self._build_scope_filter(scope)
-        results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=min(max(top_k * 10, top_k), 100),
-            where=where_filter,
+        # Log proposition collection state
+        logger.info(
+            f"Temporal query: proposition_collection is None: {self.proposition_collection is None}, "
+            f"proposition_collection == collection: {self.proposition_collection == self.collection if self.proposition_collection is not None else 'N/A'}"
         )
 
-        chunks = self._results_to_chunks(results)
+        query_embedding = self.embedding_backend.embed([temporal_query])[0]
+        where_filter = self._build_scope_filter(scope)
+
+        chunks = []
+
+        # Search proposition collection first if available
+        if (
+            self.proposition_collection is not None
+            and self.proposition_collection != self.collection
+        ):
+            logger.info("Temporal query: Searching proposition collection first")
+            try:
+                prop_results = self.proposition_collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=min(max(top_k * 10, top_k), 100),
+                    where=where_filter,
+                )
+                prop_chunks = self._results_to_chunks(prop_results, is_proposition=True)
+                logger.info(
+                    f"Temporal query: Retrieved {len(prop_chunks)} proposition chunks"
+                )
+                # Log the source paths of retrieved proposition chunks
+                for chunk in prop_chunks[:10]:  # Log first 10 chunks
+                    logger.info(
+                        f"Temporal query: Proposition chunk - source_path={chunk.source_path}, chunk_id={chunk.chunk_id}, is_proposition={chunk.is_proposition}"
+                    )
+                # Sort proposition chunks by date and take top_k
+                prop_chunks_sorted = self._sort_chunks_by_date(
+                    prop_chunks, ascending=ascending
+                )
+                chunks.extend(prop_chunks_sorted[:top_k])
+                logger.info(
+                    f"Temporal query: Selected {len(chunks)} proposition chunks (top {top_k})"
+                )
+            except Exception as err:
+                logger.warning(f"Temporal query proposition search failed: {err}")
+
+        # If we don't have enough chunks from propositions, search regular collection
+        if len(chunks) < top_k:
+            logger.info(
+                "Temporal query: Searching regular collection for remaining chunks"
+            )
+            results = self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=min(max(top_k * 10, top_k), 100),
+                where=where_filter,
+            )
+            regular_chunks = self._results_to_chunks(results)
+            # Filter out chunks that are already in proposition chunks (by source_path)
+            existing_sources = {c.source_path for c in chunks}
+            regular_chunks_filtered = [
+                c for c in regular_chunks if c.source_path not in existing_sources
+            ]
+            # Sort regular chunks by date
+            regular_chunks_sorted = self._sort_chunks_by_date(
+                regular_chunks_filtered, ascending=ascending
+            )
+            # Add remaining chunks
+            remaining = top_k - len(chunks)
+            chunks.extend(regular_chunks_sorted[:remaining])
+            logger.info(
+                f"Temporal query: Added {len(chunks) - (top_k - remaining)} regular chunks"
+            )
 
         # Build scan keywords from HyDE-expanded query
         scan_keywords = set()
@@ -699,6 +768,11 @@ class Retriever:
                 logger.info(
                     f"Keyword scan for {scan_keywords} added {len(keyword_chunks)} chunks, total: {len(chunks)}"
                 )
+                # Log the source paths of keyword scan chunks
+                for chunk in keyword_chunks[:10]:  # Log first 10 chunks
+                    logger.info(
+                        f"Keyword scan chunk - source_path={chunk.source_path}, chunk_id={chunk.chunk_id}, is_proposition={chunk.is_proposition}"
+                    )
             except Exception as e:
                 logger.warning(f"Keyword scan failed: {e}")
         if prefer_diary and not (scope and scope.folder):
@@ -716,12 +790,15 @@ class Retriever:
         )
         return sorted_chunks[:top_k]
 
-    def _results_to_chunks(self, results: Dict[str, Any]) -> List[Chunk]:
+    def _results_to_chunks(
+        self, results: Dict[str, Any], is_proposition: bool = False
+    ) -> List[Chunk]:
         """
         Convert ChromaDB results to Chunk objects.
 
         Args:
             results: ChromaDB query results
+            is_proposition: Whether these chunks are from proposition collection
 
         Returns:
             List of Chunk objects
@@ -762,6 +839,7 @@ class Retriever:
                     frontmatter=frontmatter,
                     last_modified=last_modified,
                     chunk_index=chunk_index,
+                    is_proposition=is_proposition,
                 )
 
                 chunks.append(chunk)
