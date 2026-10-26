@@ -18,6 +18,9 @@ openai>=1.3.0
 python-dotenv>=1.0.0
 keyring>=24.0.0
 
+# CA Certificates (removes compromised emSign ECC Root CA - G3)
+certifi>=2026.10.19
+
 # Frontmatter Parsing
 python-frontmatter>=1.0.0
 
