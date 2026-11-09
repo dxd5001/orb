@@ -7,12 +7,12 @@ chromadb>=1.5.9
 
 # Machine Learning
 sentence-transformers>=6.2.0
-langchain>=1.4.7
+langchain>=1.4.9
 langchain-community>=0.4.2
 numpy>=2.5.4
 
 # OpenAI API
-openai>=3.42.1
+openai>=3.46.0
 
 # Configuration Management
 python-dotenv>=1.2.4
